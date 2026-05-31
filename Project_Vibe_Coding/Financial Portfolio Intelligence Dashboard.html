@@ -1,0 +1,1036 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Futures Portfolio Dashboard — YTD 2026</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<style>
+  :root {
+    --bg:       #0a0e1a;
+    --surface:  #111827;
+    --card:     #1a2235;
+    --border:   #1e2d45;
+    --accent:   #3b82f6;
+    --gold:     #f59e0b;
+    --green:    #10b981;
+    --red:      #ef4444;
+    --yellow:   #f59e0b;
+    --text:     #e2e8f0;
+    --muted:    #64748b;
+    --light:    #94a3b8;
+  }
+  * { box-sizing:border-box; margin:0; padding:0; }
+  body { background:var(--bg); color:var(--text); font-family:'Segoe UI',system-ui,sans-serif; font-size:13px; }
+
+  /* ── NAV ── */
+  .nav { background:var(--surface); border-bottom:1px solid var(--border); padding:12px 24px; display:flex; align-items:center; justify-content:space-between; position:sticky; top:0; z-index:100; }
+  .nav-logo { font-size:16px; font-weight:700; color:var(--accent); letter-spacing:.5px; }
+  .nav-logo span { color:var(--gold); }
+  .nav-tabs { display:flex; gap:4px; }
+  .nav-tab { padding:6px 14px; border-radius:6px; cursor:pointer; color:var(--muted); border:none; background:transparent; font-size:12px; font-family:inherit; transition:.2s; }
+  .nav-tab.active, .nav-tab:hover { background:var(--border); color:var(--text); }
+  .nav-meta { color:var(--muted); font-size:11px; }
+
+  /* ── LAYOUT ── */
+  .page { display:none; padding:20px 24px; max-width:1600px; margin:0 auto; }
+  .page.active { display:block; }
+
+  /* ── KPI STRIP ── */
+  .kpi-row { display:grid; grid-template-columns:repeat(7,1fr); gap:12px; margin-bottom:20px; }
+  .kpi { background:var(--card); border:1px solid var(--border); border-radius:10px; padding:14px 16px; }
+  .kpi-label { color:var(--muted); font-size:10px; text-transform:uppercase; letter-spacing:.8px; margin-bottom:6px; }
+  .kpi-value { font-size:22px; font-weight:700; line-height:1; }
+  .kpi-sub { color:var(--muted); font-size:10px; margin-top:4px; }
+  .kpi .green { color:var(--green); }
+  .kpi .red   { color:var(--red); }
+  .kpi .gold  { color:var(--gold); }
+  .kpi .blue  { color:var(--accent); }
+  .kpi-badge { display:inline-block; padding:2px 8px; border-radius:20px; font-size:10px; font-weight:700; margin-top:6px; }
+  .badge-green { background:rgba(16,185,129,.15); color:var(--green); }
+  .badge-red   { background:rgba(239,68,68,.15);  color:var(--red); }
+  .badge-gold  { background:rgba(245,158,11,.15); color:var(--gold); }
+
+  /* ── CARDS ── */
+  .grid-2 { display:grid; grid-template-columns:1fr 1fr; gap:16px; margin-bottom:16px; }
+  .grid-3 { display:grid; grid-template-columns:2fr 1fr 1fr; gap:16px; margin-bottom:16px; }
+  .card { background:var(--card); border:1px solid var(--border); border-radius:10px; padding:18px; }
+  .card-full { background:var(--card); border:1px solid var(--border); border-radius:10px; padding:18px; margin-bottom:16px; }
+  .card-title { font-size:12px; font-weight:600; color:var(--light); text-transform:uppercase; letter-spacing:.6px; margin-bottom:14px; display:flex; align-items:center; gap:8px; }
+  .card-title .dot { width:8px; height:8px; border-radius:50%; }
+  .dot-blue   { background:var(--accent); }
+  .dot-green  { background:var(--green); }
+  .dot-gold   { background:var(--gold); }
+  .dot-red    { background:var(--red); }
+  .dot-purple { background:#a78bfa; }
+
+  /* ── CHARTS ── */
+  .chart-wrap { position:relative; width:100%; }
+
+  /* ── MONTHLY CARDS ── */
+  .month-grid { display:grid; grid-template-columns:repeat(5,1fr); gap:10px; }
+  .month-card { background:var(--surface); border:1px solid var(--border); border-radius:8px; padding:12px; text-align:center; }
+  .month-card .m-name { font-size:11px; color:var(--muted); margin-bottom:4px; }
+  .month-card .m-roi { font-size:20px; font-weight:700; }
+  .month-card .m-details { font-size:10px; color:var(--muted); margin-top:4px; }
+  .month-card .m-bar { height:4px; border-radius:2px; margin-top:8px; }
+  .month-card .m-status { font-size:9px; font-weight:700; margin-top:6px; text-transform:uppercase; letter-spacing:.5px; }
+  .m-hit  { border-color:#10b981; }
+  .m-miss { border-color:#ef4444; }
+  .m-ok   { border-color:#f59e0b; }
+
+  /* ── CONTRACT TABLE ── */
+  .perf-table { width:100%; border-collapse:collapse; }
+  .perf-table th { text-align:left; padding:8px 10px; font-size:10px; color:var(--muted); text-transform:uppercase; letter-spacing:.6px; border-bottom:1px solid var(--border); }
+  .perf-table td { padding:9px 10px; border-bottom:1px solid rgba(30,45,69,.5); font-size:12px; }
+  .perf-table tr:hover td { background:rgba(59,130,246,.04); }
+  .wr-bar { height:6px; border-radius:3px; display:inline-block; vertical-align:middle; }
+  .pnl-pos { color:var(--green); font-weight:600; }
+  .pnl-neg { color:var(--red); font-weight:600; }
+  .sector-pill { padding:2px 7px; border-radius:10px; font-size:9px; font-weight:600; }
+  .s-eq  { background:rgba(59,130,246,.15);  color:#93c5fd; }
+  .s-me  { background:rgba(245,158,11,.15);  color:#fcd34d; }
+  .s-en  { background:rgba(239,68,68,.15);   color:#fca5a5; }
+  .s-bo  { background:rgba(167,139,250,.15); color:#c4b5fd; }
+
+  /* ── TRADE LOG ── */
+  .filters { display:flex; gap:10px; margin-bottom:14px; flex-wrap:wrap; align-items:center; }
+  .filter-select { background:var(--surface); border:1px solid var(--border); color:var(--text); padding:6px 10px; border-radius:6px; font-size:12px; font-family:inherit; cursor:pointer; }
+  .filter-select:focus { outline:none; border-color:var(--accent); }
+  .search-input { background:var(--surface); border:1px solid var(--border); color:var(--text); padding:6px 12px; border-radius:6px; font-size:12px; font-family:inherit; width:200px; }
+  .search-input::placeholder { color:var(--muted); }
+  .search-input:focus { outline:none; border-color:var(--accent); }
+  .filter-btn { background:var(--border); border:none; color:var(--text); padding:6px 12px; border-radius:6px; font-size:11px; cursor:pointer; font-family:inherit; }
+  .filter-btn:hover { background:var(--accent); }
+  .log-count { color:var(--muted); font-size:11px; margin-left:auto; }
+
+  .log-table { width:100%; border-collapse:collapse; font-size:11.5px; }
+  .log-table th { text-align:left; padding:8px 8px; font-size:10px; color:var(--muted); text-transform:uppercase; letter-spacing:.5px; border-bottom:1px solid var(--border); position:sticky; top:0; background:var(--card); cursor:pointer; user-select:none; }
+  .log-table th:hover { color:var(--text); }
+  .log-table td { padding:7px 8px; border-bottom:1px solid rgba(30,45,69,.4); }
+  .log-table tr:hover td { background:rgba(59,130,246,.05); }
+  .log-wrap { max-height:520px; overflow-y:auto; border:1px solid var(--border); border-radius:8px; }
+  .log-wrap::-webkit-scrollbar { width:5px; }
+  .log-wrap::-webkit-scrollbar-thumb { background:var(--border); border-radius:3px; }
+
+  .pill { padding:2px 8px; border-radius:10px; font-size:10px; font-weight:700; }
+  .pill-win  { background:rgba(16,185,129,.15);  color:#6ee7b7; }
+  .pill-loss { background:rgba(239,68,68,.15);   color:#fca5a5; }
+  .pill-be   { background:rgba(245,158,11,.15);  color:#fcd34d; }
+  .pill-long  { background:rgba(16,185,129,.1);   color:#6ee7b7; }
+  .pill-short { background:rgba(239,68,68,.1);    color:#fca5a5; }
+  .pill-high   { background:rgba(59,130,246,.15);  color:#93c5fd; }
+  .pill-medium { background:rgba(167,139,250,.15); color:#c4b5fd; }
+  .pill-low    { background:rgba(100,116,139,.15); color:#94a3b8; }
+
+  /* ── TRADING PLAN ── */
+  .plan-grid { display:grid; grid-template-columns:1fr 1fr; gap:16px; }
+  .plan-section { background:var(--surface); border:1px solid var(--border); border-radius:8px; padding:16px; }
+  .plan-section h3 { font-size:12px; font-weight:700; color:var(--accent); text-transform:uppercase; letter-spacing:.6px; margin-bottom:10px; }
+  .plan-section ul { list-style:none; }
+  .plan-section li { padding:5px 0; border-bottom:1px solid rgba(30,45,69,.5); color:var(--light); font-size:12px; line-height:1.5; }
+  .plan-section li:last-child { border-bottom:none; }
+  .plan-section li::before { content:"▸ "; color:var(--accent); }
+  .rule-tag { display:inline-block; padding:1px 6px; border-radius:4px; font-size:9px; font-weight:700; margin-right:4px; }
+  .rule-entry { background:rgba(16,185,129,.15); color:var(--green); }
+  .rule-exit  { background:rgba(239,68,68,.15);  color:var(--red); }
+  .rule-size  { background:rgba(59,130,246,.15); color:var(--accent); }
+  .rule-risk  { background:rgba(245,158,11,.15); color:var(--gold); }
+
+  .alert-box { background:rgba(239,68,68,.08); border:1px solid rgba(239,68,68,.3); border-radius:8px; padding:12px 16px; margin-bottom:16px; }
+  .alert-box.green { background:rgba(16,185,129,.08); border-color:rgba(16,185,129,.3); }
+  .alert-box h4 { font-size:11px; font-weight:700; margin-bottom:6px; }
+  .alert-box.green h4 { color:var(--green); }
+  .alert-box h4 { color:var(--red); }
+  .alert-box p { font-size:11.5px; color:var(--light); line-height:1.6; }
+
+  /* ── PROGRESS BAR ── */
+  .progress-wrap { background:var(--surface); border-radius:6px; height:10px; overflow:hidden; margin-top:8px; }
+  .progress-fill { height:100%; border-radius:6px; transition:.5s; }
+
+  /* ── RESPONSIVE ── */
+  @media(max-width:1200px) { .kpi-row { grid-template-columns:repeat(4,1fr); } }
+  @media(max-width:900px)  { .grid-2,.grid-3 { grid-template-columns:1fr; } .month-grid { grid-template-columns:repeat(3,1fr); } }
+</style>
+</head>
+<body>
+
+<!-- NAV -->
+<nav class="nav">
+  <div class="nav-logo">⚡ <span>FUTURES</span> PORTFOLIO INTELLIGENCE</div>
+  <div class="nav-tabs">
+    <button class="nav-tab active" onclick="showPage('dashboard')">📊 Dashboard</button>
+    <button class="nav-tab" onclick="showPage('monthly')">📅 Monthly P&amp;L</button>
+    <button class="nav-tab" onclick="showPage('contracts')">📈 Contract Analysis</button>
+    <button class="nav-tab" onclick="showPage('tradelog')">📋 Trade Log</button>
+    <button class="nav-tab" onclick="showPage('plan')">🎯 Trading Plan</button>
+  </div>
+  <div class="nav-meta">YTD 2026 · Jan 2 – May 29 · Stress Test (40% Target Win Rate)</div>
+</nav>
+
+<!-- ══════════════════════════════════════════════════════════════════ -->
+<!-- PAGE: DASHBOARD -->
+<!-- ══════════════════════════════════════════════════════════════════ -->
+<div id="page-dashboard" class="page active">
+
+  <!-- KPI Strip -->
+  <div class="kpi-row" style="margin-top:16px;">
+    <div class="kpi">
+      <div class="kpi-label">Portfolio Value</div>
+      <div class="kpi-value green">$178,331</div>
+      <div class="kpi-sub">Started: $100,000</div>
+      <div class="kpi-badge badge-green">✅ TARGET HIT</div>
+    </div>
+    <div class="kpi">
+      <div class="kpi-label">Total ROI</div>
+      <div class="kpi-value green">+78.3%</div>
+      <div class="kpi-sub">Target: +20.0%</div>
+      <div class="progress-wrap"><div class="progress-fill" style="width:100%;background:var(--green);"></div></div>
+    </div>
+    <div class="kpi">
+      <div class="kpi-label">Win Rate</div>
+      <div class="kpi-value gold">32.5%</div>
+      <div class="kpi-sub">63W / 122L / 9BE</div>
+      <div class="progress-wrap"><div class="progress-fill" style="width:32.5%;background:var(--gold);"></div></div>
+    </div>
+    <div class="kpi">
+      <div class="kpi-label">Actual R:R Ratio</div>
+      <div class="kpi-value blue">2.73:1</div>
+      <div class="kpi-sub">Avg Win $4,285 / Loss $1,568</div>
+    </div>
+    <div class="kpi">
+      <div class="kpi-label">Profit Factor</div>
+      <div class="kpi-value gold">1.41</div>
+      <div class="kpi-sub">Gross P / Gross L</div>
+    </div>
+    <div class="kpi">
+      <div class="kpi-label">Max Drawdown</div>
+      <div class="kpi-value red">-9.82%</div>
+      <div class="kpi-sub">$9,820 peak-to-trough</div>
+    </div>
+    <div class="kpi">
+      <div class="kpi-label">Total Trades</div>
+      <div class="kpi-value blue">194</div>
+      <div class="kpi-sub">~1.8 trades/day</div>
+    </div>
+  </div>
+
+  <!-- ROI Target Alert -->
+  <div class="alert-box green">
+    <h4>✅ 20% ROI TARGET STATUS — ACHIEVED</h4>
+    <p>Despite a stress-test win rate of only 32.5% (target was 40%), the strategy generated <strong>+78.3% ROI</strong> 
+    on the $100K portfolio — delivering <strong>$78,331</strong> in net profit YTD. 
+    This is because the average R:R ratio of <strong>2.73:1</strong> means winners are 2.73× larger than losses. 
+    Even at a low win rate, positive expected value compounds. The maximum drawdown of <strong>-9.82%</strong> 
+    stayed within acceptable risk parameters. Key insight: <strong>NG, ES, and CL drove most of the alpha.</strong></p>
+  </div>
+
+  <!-- Equity Curve + Drawdown -->
+  <div class="grid-2">
+    <div class="card">
+      <div class="card-title"><span class="dot dot-green"></span>Equity Curve — Portfolio Value</div>
+      <div class="chart-wrap" style="height:220px"><canvas id="equityChart"></canvas></div>
+    </div>
+    <div class="card">
+      <div class="card-title"><span class="dot dot-red"></span>Drawdown from Peak (%)</div>
+      <div class="chart-wrap" style="height:220px"><canvas id="ddChart"></canvas></div>
+    </div>
+  </div>
+
+  <!-- Cumulative ROI + Monthly Win Rate -->
+  <div class="grid-2">
+    <div class="card">
+      <div class="card-title"><span class="dot dot-blue"></span>Cumulative ROI vs 20% Target</div>
+      <div class="chart-wrap" style="height:200px"><canvas id="cumRoiChart"></canvas></div>
+    </div>
+    <div class="card">
+      <div class="card-title"><span class="dot dot-gold"></span>Monthly P&amp;L ($)</div>
+      <div class="chart-wrap" style="height:200px"><canvas id="monthlyPnlChart"></canvas></div>
+    </div>
+  </div>
+
+  <!-- Contract PnL Bar -->
+  <div class="card-full">
+    <div class="card-title"><span class="dot dot-purple"></span>P&amp;L by Contract — YTD 2026</div>
+    <div class="chart-wrap" style="height:160px"><canvas id="contractPnlChart"></canvas></div>
+  </div>
+
+</div><!-- /page-dashboard -->
+
+<!-- ══════════════════════════════════════════════════════════════════ -->
+<!-- PAGE: MONTHLY -->
+<!-- ══════════════════════════════════════════════════════════════════ -->
+<div id="page-monthly" class="page">
+  <div style="margin-top:16px;">
+    <div class="month-grid" style="margin-bottom:20px;">
+
+      <div class="month-card m-ok">
+        <div class="m-name">Jan 2026</div>
+        <div class="m-roi" style="color:#f59e0b">+3.98%</div>
+        <div class="m-details">36 trades · 11W/23L · WR 30.6%</div>
+        <div class="m-details">P&amp;L: $3,975</div>
+        <div class="m-bar" style="background:#f59e0b;width:13.266666666666666%"></div>
+        <div class="m-status" style="color:#f59e0b">⚠ BELOW PACE</div>
+        <div class="m-details" style="margin-top:4px">Cum ROI: +4.0%</div>
+      </div>
+      <div class="month-card m-hit">
+        <div class="m-name">Feb 2026</div>
+        <div class="m-roi" style="color:#10b981">+13.86%</div>
+        <div class="m-details">37 trades · 13W/23L · WR 35.1%</div>
+        <div class="m-details">P&amp;L: $14,411</div>
+        <div class="m-bar" style="background:#10b981;width:46.199999999999996%"></div>
+        <div class="m-status" style="color:#10b981">✅ ON TRACK</div>
+        <div class="m-details" style="margin-top:4px">Cum ROI: +18.4%</div>
+      </div>
+      <div class="month-card m-hit">
+        <div class="m-name">Mar 2026</div>
+        <div class="m-roi" style="color:#10b981">+17.11%</div>
+        <div class="m-details">39 trades · 12W/25L · WR 30.8%</div>
+        <div class="m-details">P&amp;L: $20,253</div>
+        <div class="m-bar" style="background:#10b981;width:57.03333333333334%"></div>
+        <div class="m-status" style="color:#10b981">✅ ON TRACK</div>
+        <div class="m-details" style="margin-top:4px">Cum ROI: +38.6%</div>
+      </div>
+      <div class="month-card m-hit">
+        <div class="m-name">Apr 2026</div>
+        <div class="m-roi" style="color:#10b981">+4.50%</div>
+        <div class="m-details">41 trades · 11W/30L · WR 26.8%</div>
+        <div class="m-details">P&amp;L: $6,234</div>
+        <div class="m-bar" style="background:#10b981;width:15.0%"></div>
+        <div class="m-status" style="color:#10b981">✅ ON TRACK</div>
+        <div class="m-details" style="margin-top:4px">Cum ROI: +44.9%</div>
+      </div>
+      <div class="month-card m-hit">
+        <div class="m-name">May 2026</div>
+        <div class="m-roi" style="color:#10b981">+23.09%</div>
+        <div class="m-details">41 trades · 16W/21L · WR 39.0%</div>
+        <div class="m-details">P&amp;L: $33,458</div>
+        <div class="m-bar" style="background:#10b981;width:76.96666666666665%"></div>
+        <div class="m-status" style="color:#10b981">✅ ON TRACK</div>
+        <div class="m-details" style="margin-top:4px">Cum ROI: +78.3%</div>
+      </div>
+    </div>
+
+    <div class="grid-2">
+      <div class="card">
+        <div class="card-title"><span class="dot dot-blue"></span>Monthly ROI vs 4% Monthly Target</div>
+        <div class="chart-wrap" style="height:240px"><canvas id="monthlyRoiChart2"></canvas></div>
+      </div>
+      <div class="card">
+        <div class="card-title"><span class="dot dot-gold"></span>Monthly Win Rate & Trade Count</div>
+        <div class="chart-wrap" style="height:240px"><canvas id="monthlyWrChart"></canvas></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════════════════════════════ -->
+<!-- PAGE: CONTRACTS -->
+<!-- ══════════════════════════════════════════════════════════════════ -->
+<div id="page-contracts" class="page">
+  <div style="margin-top:16px;">
+    <div class="grid-2" style="margin-bottom:16px;">
+      <div class="card">
+        <div class="card-title"><span class="dot dot-green"></span>Win Rate by Contract</div>
+        <div class="chart-wrap" style="height:220px"><canvas id="wrContractChart"></canvas></div>
+      </div>
+      <div class="card">
+        <div class="card-title"><span class="dot dot-blue"></span>P&amp;L Contribution by Contract</div>
+        <div class="chart-wrap" style="height:220px"><canvas id="pnlContractChart2"></canvas></div>
+      </div>
+    </div>
+    <div class="card-full">
+      <div class="card-title"><span class="dot dot-gold"></span>Contract Performance Scorecard</div>
+      <table class="perf-table">
+        <thead>
+          <tr>
+            <th>Contract</th><th>Sector</th><th>Trades</th><th>Wins</th><th>Losses</th>
+            <th>Win Rate</th><th>Net P&amp;L</th><th>Grade</th><th>Action</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><strong>ES</strong></td>
+            <td><span class="sector-pill s-eq">Equity</span></td>
+            <td>32</td><td style="color:var(--green)">12</td>
+            <td style="color:var(--red)">20</td>
+            <td>
+              <span style="color:#f59e0b;font-weight:600">37.5%</span>
+              <div style="margin-top:3px;background:var(--border);border-radius:3px;height:4px;width:80px;display:inline-block;vertical-align:middle;">
+                <div style="width:45px;height:4px;background:#f59e0b;border-radius:3px;"></div>
+              </div>
+            </td>
+            <td class="pnl-pos">$+26,684</td>
+            <td><strong style="color:#3b82f6">B</strong></td>
+            <td style="font-size:11px">✅ Keep Trading</td>
+          </tr>
+          <tr>
+            <td><strong>NG</strong></td>
+            <td><span class="sector-pill s-en">Energy</span></td>
+            <td>17</td><td style="color:var(--green)">9</td>
+            <td style="color:var(--red)">8</td>
+            <td>
+              <span style="color:#10b981;font-weight:600">52.9%</span>
+              <div style="margin-top:3px;background:var(--border);border-radius:3px;height:4px;width:80px;display:inline-block;vertical-align:middle;">
+                <div style="width:63px;height:4px;background:#10b981;border-radius:3px;"></div>
+              </div>
+            </td>
+            <td class="pnl-pos">$+23,021</td>
+            <td><strong style="color:#10b981">A</strong></td>
+            <td style="font-size:11px">✅ Keep Trading</td>
+          </tr>
+          <tr>
+            <td><strong>CL</strong></td>
+            <td><span class="sector-pill s-en">Energy</span></td>
+            <td>33</td><td style="color:var(--green)">12</td>
+            <td style="color:var(--red)">21</td>
+            <td>
+              <span style="color:#f59e0b;font-weight:600">36.4%</span>
+              <div style="margin-top:3px;background:var(--border);border-radius:3px;height:4px;width:80px;display:inline-block;vertical-align:middle;">
+                <div style="width:43px;height:4px;background:#f59e0b;border-radius:3px;"></div>
+              </div>
+            </td>
+            <td class="pnl-pos">$+17,523</td>
+            <td><strong style="color:#3b82f6">B</strong></td>
+            <td style="font-size:11px">✅ Keep Trading</td>
+          </tr>
+          <tr>
+            <td><strong>ZB</strong></td>
+            <td><span class="sector-pill s-bo">Bonds</span></td>
+            <td>26</td><td style="color:var(--green)">8</td>
+            <td style="color:var(--red)">18</td>
+            <td>
+              <span style="color:#f59e0b;font-weight:600">30.8%</span>
+              <div style="margin-top:3px;background:var(--border);border-radius:3px;height:4px;width:80px;display:inline-block;vertical-align:middle;">
+                <div style="width:36px;height:4px;background:#f59e0b;border-radius:3px;"></div>
+              </div>
+            </td>
+            <td class="pnl-pos">$+10,790</td>
+            <td><strong style="color:#3b82f6">B</strong></td>
+            <td style="font-size:11px">✅ Keep Trading</td>
+          </tr>
+          <tr>
+            <td><strong>GC</strong></td>
+            <td><span class="sector-pill s-me">Metals</span></td>
+            <td>23</td><td style="color:var(--green)">7</td>
+            <td style="color:var(--red)">16</td>
+            <td>
+              <span style="color:#f59e0b;font-weight:600">30.4%</span>
+              <div style="margin-top:3px;background:var(--border);border-radius:3px;height:4px;width:80px;display:inline-block;vertical-align:middle;">
+                <div style="width:36px;height:4px;background:#f59e0b;border-radius:3px;"></div>
+              </div>
+            </td>
+            <td class="pnl-pos">$+5,402</td>
+            <td><strong style="color:#3b82f6">B</strong></td>
+            <td style="font-size:11px">✅ Keep Trading</td>
+          </tr>
+          <tr>
+            <td><strong>ZN</strong></td>
+            <td><span class="sector-pill s-bo">Bonds</span></td>
+            <td>2</td><td style="color:var(--green)">2</td>
+            <td style="color:var(--red)">0</td>
+            <td>
+              <span style="color:#10b981;font-weight:600">100.0%</span>
+              <div style="margin-top:3px;background:var(--border);border-radius:3px;height:4px;width:80px;display:inline-block;vertical-align:middle;">
+                <div style="width:120px;height:4px;background:#10b981;border-radius:3px;"></div>
+              </div>
+            </td>
+            <td class="pnl-pos">$+5,045</td>
+            <td><strong style="color:#10b981">A</strong></td>
+            <td style="font-size:11px">✅ Keep Trading</td>
+          </tr>
+          <tr>
+            <td><strong>NQ</strong></td>
+            <td><span class="sector-pill s-eq">Equity</span></td>
+            <td>36</td><td style="color:var(--green)">9</td>
+            <td style="color:var(--red)">27</td>
+            <td>
+              <span style="color:#f59e0b;font-weight:600">25.0%</span>
+              <div style="margin-top:3px;background:var(--border);border-radius:3px;height:4px;width:80px;display:inline-block;vertical-align:middle;">
+                <div style="width:30px;height:4px;background:#f59e0b;border-radius:3px;"></div>
+              </div>
+            </td>
+            <td class="pnl-pos">$+4,464</td>
+            <td><strong style="color:#f59e0b">C</strong></td>
+            <td style="font-size:11px">⚠ Reduce Size</td>
+          </tr>
+          <tr>
+            <td><strong>SI</strong></td>
+            <td><span class="sector-pill s-me">Metals</span></td>
+            <td>8</td><td style="color:var(--green)">1</td>
+            <td style="color:var(--red)">7</td>
+            <td>
+              <span style="color:#ef4444;font-weight:600">12.5%</span>
+              <div style="margin-top:3px;background:var(--border);border-radius:3px;height:4px;width:80px;display:inline-block;vertical-align:middle;">
+                <div style="width:15px;height:4px;background:#ef4444;border-radius:3px;"></div>
+              </div>
+            </td>
+            <td class="pnl-neg">$-5,410</td>
+            <td><strong style="color:#ef4444">D</strong></td>
+            <td style="font-size:11px">🛑 Review/Pause</td>
+          </tr>
+          <tr>
+            <td><strong>YM</strong></td>
+            <td><span class="sector-pill s-eq">Equity</span></td>
+            <td>17</td><td style="color:var(--green)">3</td>
+            <td style="color:var(--red)">14</td>
+            <td>
+              <span style="color:#ef4444;font-weight:600">17.6%</span>
+              <div style="margin-top:3px;background:var(--border);border-radius:3px;height:4px;width:80px;display:inline-block;vertical-align:middle;">
+                <div style="width:21px;height:4px;background:#ef4444;border-radius:3px;"></div>
+              </div>
+            </td>
+            <td class="pnl-neg">$-9,188</td>
+            <td><strong style="color:#ef4444">D</strong></td>
+            <td style="font-size:11px">🛑 Review/Pause</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════════════════════════════ -->
+<!-- PAGE: TRADE LOG -->
+<!-- ══════════════════════════════════════════════════════════════════ -->
+<div id="page-tradelog" class="page">
+  <div style="margin-top:16px;">
+    <div class="card-full">
+      <div class="card-title"><span class="dot dot-blue"></span>Trade Log — 194 Trades YTD 2026
+        <span style="margin-left:auto;font-size:10px;color:var(--muted);text-transform:none">Click column headers to sort</span>
+      </div>
+      <div class="filters">
+        <select class="filter-select" id="f-contract" onchange="filterLog()">
+          <option value="">All Contracts</option>
+          <option>ES</option><option>NQ</option><option>YM</option>
+          <option>GC</option><option>SI</option><option>CL</option>
+          <option>NG</option><option>ZB</option><option>ZN</option><option>ZF</option>
+        </select>
+        <select class="filter-select" id="f-outcome" onchange="filterLog()">
+          <option value="">All Outcomes</option>
+          <option>WIN</option><option>LOSS</option><option>BE</option>
+        </select>
+        <select class="filter-select" id="f-direction" onchange="filterLog()">
+          <option value="">All Directions</option>
+          <option>LONG</option><option>SHORT</option>
+        </select>
+        <select class="filter-select" id="f-month" onchange="filterLog()">
+          <option value="">All Months</option>
+          <option>Jan 2026</option><option>Feb 2026</option><option>Mar 2026</option>
+          <option>Apr 2026</option><option>May 2026</option>
+        </select>
+        <select class="filter-select" id="f-conviction" onchange="filterLog()">
+          <option value="">All Conviction</option>
+          <option>HIGH</option><option>MEDIUM</option><option>LOW</option>
+        </select>
+        <input class="search-input" id="f-search" placeholder="🔍 Search notes..." oninput="filterLog()">
+        <button class="filter-btn" onclick="resetFilters()">✕ Reset</button>
+        <span class="log-count" id="log-count">Showing 194 trades</span>
+      </div>
+      <div class="log-wrap">
+        <table class="log-table" id="logTable">
+          <thead>
+            <tr>
+              <th onclick="sortLog('id')">#</th>
+              <th onclick="sortLog('date')">Date ↕</th>
+              <th onclick="sortLog('contract')">Contract</th>
+              <th onclick="sortLog('direction')">Dir</th>
+              <th onclick="sortLog('conviction')">Conv</th>
+              <th onclick="sortLog('entry')">Entry</th>
+              <th onclick="sortLog('stop')">Stop</th>
+              <th onclick="sortLog('target')">Target</th>
+              <th onclick="sortLog('rr')">R:R</th>
+              <th onclick="sortLog('risk_amt')">Risk $</th>
+              <th onclick="sortLog('outcome')">Result</th>
+              <th onclick="sortLog('pnl')">P&amp;L ↕</th>
+              <th onclick="sortLog('portfolio_value')">Portfolio</th>
+              <th onclick="sortLog('roi_pct')">ROI%</th>
+              <th>Notes</th>
+            </tr>
+          </thead>
+          <tbody id="logBody"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════════════════════════════ -->
+<!-- PAGE: TRADING PLAN -->
+<!-- ══════════════════════════════════════════════════════════════════ -->
+<div id="page-plan" class="page">
+  <div style="margin-top:16px;">
+
+    <div class="alert-box green" style="margin-bottom:16px;">
+      <h4>🎯 STRATEGY OBJECTIVE</h4>
+      <p>Generate >20% annual ROI on a $100,000 futures portfolio trading ES, NQ, YM, GC, SI, CL, NG, ZB, ZN, ZF.
+      Risk 1–2% per trade ($1,000–$2,000). Minimum 2:1 R:R per trade. Trade only HIGH and MEDIUM conviction 
+      setups confirmed on at least 2 of 3 timeframes (Monthly/Weekly/Daily). The stress test at 32.5% win rate 
+      still produced +78.33% ROI due to a 2.73:1 actual R:R, demonstrating the strategy's positive expected value.</p>
+    </div>
+
+    <div class="plan-grid">
+      <div class="plan-section">
+        <h3>📋 Daily Pre-Market Routine</h3>
+        <ul>
+          <li><span class="rule-tag rule-entry">6:00 AM</span> Review overnight futures gaps vs prior close</li>
+          <li><span class="rule-tag rule-entry">6:15 AM</span> Check economic calendar (NFP, CPI, EIA, Fed speakers)</li>
+          <li><span class="rule-tag rule-entry">6:30 AM</span> Run Pre-Market PDF Report — update bias scorecard</li>
+          <li><span class="rule-tag rule-entry">7:00 AM</span> Identify top 2-3 setups from HIGH conviction list</li>
+          <li><span class="rule-tag rule-entry">7:30 AM</span> Set entry orders, stops, and profit targets in platform</li>
+          <li><span class="rule-tag rule-entry">8:30 AM</span> Re-evaluate if major macro data released pre-open</li>
+          <li><span class="rule-tag rule-entry">9:25 AM</span> Final check — no trades in first 5 minutes (opening range)</li>
+          <li><span class="rule-tag rule-entry">POST</span> Log all trades same day; update portfolio tracker</li>
+        </ul>
+      </div>
+      <div class="plan-section">
+        <h3>⚙️ Trade Entry Rules</h3>
+        <ul>
+          <li><span class="rule-tag rule-entry">RULE 1</span> Only enter after confirmation on Daily + Weekly timeframe</li>
+          <li><span class="rule-tag rule-entry">RULE 2</span> Wait for pullback to support — never chase ATH breakouts</li>
+          <li><span class="rule-tag rule-entry">RULE 3</span> MACD must be trending in trade direction on Daily</li>
+          <li><span class="rule-tag rule-entry">RULE 4</span> RSI must not be overbought (>75) for longs or oversold (<25) for shorts</li>
+          <li><span class="rule-tag rule-entry">RULE 5</span> Volume must be above 20-period average on entry candle</li>
+          <li><span class="rule-tag rule-entry">RULE 6</span> No trades within 30 min of major economic releases</li>
+          <li><span class="rule-tag rule-entry">RULE 7</span> Max 3 concurrent open positions across all contracts</li>
+          <li><span class="rule-tag rule-entry">RULE 8</span> Correlated contracts count as 1 (ES + NQ = 1 position)</li>
+        </ul>
+      </div>
+      <div class="plan-section">
+        <h3>🛑 Stop Loss & Exit Rules</h3>
+        <ul>
+          <li><span class="rule-tag rule-exit">EXIT 1</span> Hard stop always set at order entry — no mental stops</li>
+          <li><span class="rule-tag rule-exit">EXIT 2</span> Move stop to break-even once trade reaches 1:1 R:R</li>
+          <li><span class="rule-tag rule-exit">EXIT 3</span> Take 50% off at 2:1 target; trail remaining with ATR stop</li>
+          <li><span class="rule-tag rule-exit">EXIT 4</span> Full exit if price closes against trade direction on Daily</li>
+          <li><span class="rule-tag rule-exit">EXIT 5</span> Time-based exit: close any trade open more than 5 days</li>
+          <li><span class="rule-tag rule-exit">EXIT 6</span> Daily loss limit: if down 3% in a day, stop trading that day</li>
+          <li><span class="rule-tag rule-exit">EXIT 7</span> Weekly loss limit: if down 5% in a week, review before trading</li>
+        </ul>
+      </div>
+      <div class="plan-section">
+        <h3>📐 Position Sizing Rules</h3>
+        <ul>
+          <li><span class="rule-tag rule-size">SIZE 1</span> HIGH conviction: 1.5–2% risk ($1,500–$2,000)</li>
+          <li><span class="rule-tag rule-size">SIZE 2</span> MEDIUM conviction: 1% risk ($1,000)</li>
+          <li><span class="rule-tag rule-size">SIZE 3</span> LOW conviction: 0.5% risk — avoid entirely if possible</li>
+          <li><span class="rule-tag rule-size">SIZE 4</span> After 3 consecutive losses: halve position size for next 5 trades</li>
+          <li><span class="rule-tag rule-size">SIZE 5</span> After new portfolio high: can scale to 2% on HIGH conviction</li>
+          <li><span class="rule-tag rule-size">SIZE 6</span> Max total risk across all open positions: 5% of portfolio</li>
+        </ul>
+      </div>
+      <div class="plan-section">
+        <h3>⚠️ Strategy Review Triggers</h3>
+        <ul>
+          <li><span class="rule-tag rule-risk">REVIEW 1</span> Win rate drops below 25% over 30-trade rolling window</li>
+          <li><span class="rule-tag rule-risk">REVIEW 2</span> Drawdown exceeds 10% from portfolio peak</li>
+          <li><span class="rule-tag rule-risk">REVIEW 3</span> Monthly ROI below 0% for 2 consecutive months</li>
+          <li><span class="rule-tag rule-risk">REVIEW 4</span> Any single contract with grade D for 2 consecutive months → pause it</li>
+          <li><span class="rule-tag rule-risk">REVIEW 5</span> Profit factor drops below 1.2 over 50-trade window</li>
+          <li><span class="rule-tag rule-risk">REVIEW 6</span> Cumulative ROI tracking 10%+ behind the monthly target pace</li>
+        </ul>
+      </div>
+      <div class="plan-section">
+        <h3>📊 ROI Milestone Plan ($100K → $120K+)</h3>
+        <ul>
+          <li><span class="rule-tag rule-entry">JAN</span> Target +4% ($4,000) · Actual: +$3,975 ≈ +3.98% ⚠</li>
+          <li><span class="rule-tag rule-entry">FEB</span> Target +4% · Actual: +$14,411 ≈ +13.86% ✅</li>
+          <li><span class="rule-tag rule-entry">MAR</span> Target +4% · Actual: +$20,253 ≈ +17.11% ✅</li>
+          <li><span class="rule-tag rule-entry">APR</span> Target +4% · Actual: +$6,234 ≈ +4.50% ✅</li>
+          <li><span class="rule-tag rule-entry">MAY</span> Target +4% · Actual: +$33,458 ≈ +23.09% ✅</li>
+          <li><span class="rule-tag rule-entry">YTD</span> Target +20% · Actual: +78.33% — Stress test PASSED ✅</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════════════════════════════ -->
+<!-- SCRIPTS -->
+<!-- ══════════════════════════════════════════════════════════════════ -->
+<script>
+const TRADES = [{"id": 1, "date": "2026-01-02", "day_of_week": "Fri", "month": "Jan 2026", "contract": "CL", "sector": "Energy", "direction": "SHORT", "conviction": "MEDIUM", "entry": 71.92, "stop": 81.92, "target": 48.92, "rr": 2.3, "risk_amt": 1000.0, "outcome": "LOSS", "pnl": -1000.0, "portfolio_value": 99000.0, "roi_pct": -1.0, "note": "Gap through stop level"}, {"id": 2, "date": "2026-01-02", "day_of_week": "Fri", "month": "Jan 2026", "contract": "NQ", "sector": "Equity", "direction": "LONG", "conviction": "HIGH", "entry": 20472.09, "stop": 20397.84, "target": 20650.29, "rr": 2.4, "risk_amt": 1485.0, "outcome": "LOSS", "pnl": -1485.0, "portfolio_value": 97515.0, "roi_pct": -2.48, "note": "Reversal at resistance"}, {"id": 3, "date": "2026-01-05", "day_of_week": "Mon", "month": "Jan 2026", "contract": "NQ", "sector": "Equity", "direction": "LONG", "conviction": "HIGH", "entry": 20485.91, "stop": 20412.76, "target": 20698.04, "rr": 2.9, "risk_amt": 1463.0, "outcome": "BE", "pnl": -104.0, "portfolio_value": 97411.0, "roi_pct": -2.59, "note": "Moved stop to break-even"}, {"id": 4, "date": "2026-01-05", "day_of_week": "Mon", "month": "Jan 2026", "contract": "ES", "sector": "Equity", "direction": "LONG", "conviction": "HIGH", "entry": 5799.82, "stop": 5770.6, "target": 5896.25, "rr": 3.3, "risk_amt": 1461.0, "outcome": "LOSS", "pnl": -1461.0, "portfolio_value": 95950.0, "roi_pct": -4.05, "note": "Spread wider than expected"}, {"id": 5, "date": "2026-01-06", "day_of_week": "Tue", "month": "Jan 2026", "contract": "ZN", "sector": "Bonds", "direction": "SHORT", "conviction": "MEDIUM", "entry": 109.22, "stop": 118.82, "target": 86.18, "rr": 2.4, "risk_amt": 960.0, "outcome": "WIN", "pnl": 2304.0, "portfolio_value": 98254.0, "roi_pct": -1.75, "note": "Support held perfectly"}, {"id": 6, "date": "2026-01-07", "day_of_week": "Wed", "month": "Jan 2026", "contract": "ZB", "sector": "Bonds", "direction": "SHORT", "conviction": "HIGH", "entry": 115.11, "stop": 129.85, "target": 82.68, "rr": 2.2, "risk_amt": 1474.0, "outcome": "WIN", "pnl": 3243.0, "portfolio_value": 101497.0, "roi_pct": 1.5, "note": "Volume surge confirmed move"}, {"id": 7, "date": "2026-01-08", "day_of_week": "Thu", "month": "Jan 2026", "contract": "ZB", "sector": "Bonds", "direction": "SHORT", "conviction": "MEDIUM", "entry": 115.09, "stop": 125.24, "target": 83.62, "rr": 3.1, "risk_amt": 1015.0, "outcome": "LOSS", "pnl": -1015.0, "portfolio_value": 100482.0, "roi_pct": 0.48, "note": "Gap through stop level"}, {"id": 8, "date": "2026-01-09", "day_of_week": "Fri", "month": "Jan 2026", "contract": "NQ", "sector": "Equity", "direction": "LONG", "conviction": "HIGH", "entry": 20488.16, "stop": 20412.81, "target": 20653.93, "rr": 2.2, "risk_amt": 1507.0, "outcome": "LOSS", "pnl": -1507.0, "portfolio_value": 98975.0, "roi_pct": -1.03, "note": "Gap through stop level"}, {"id": 9, "date": "2026-01-09", "day_of_week": "Fri", "month": "Jan 2026", "contract": "CL", "sector": "Energy", "direction": "SHORT", "conviction": "MEDIUM", "entry": 72.08, "stop": 81.98, "target": 38.42, "rr": 3.4, "risk_amt": 990.0, "outcome": "LOSS", "pnl": -990.0, "portfolio_value": 97985.0, "roi_pct": -2.02, "note": "Spread wider than expected"}, {"id": 10, "date": "2026-01-12", "day_of_week": "Mon", "month": "Jan 2026", "contract": "YM", "sector": "Equity", "direction": "LONG", "conviction": "HIGH", "entry": 41949.63, "stop": 41655.63, "target": 42625.83, "rr": 2.3, "risk_amt": 1470.0, "outcome": "LOSS", "pnl": -1470.0, "portfolio_value": 96515.0, "roi_pct": -3.48, "note": "False breakout"}, {"id": 11, "date": "2026-01-12", "day_of_week": "Mon", "month": "Jan 2026", "contract": "CL", "sector": "Energy", "direction": "SHORT", "conviction": "MEDIUM", "entry": 71.93, "stop": 81.58, "target": 42.98, "rr": 3.0, "risk_amt": 965.0, "outcome": "WIN", "pnl": 2895.0, "portfolio_value": 99410.0, "roi_pct": -0.59, "note": "Volume surge confirmed move"}, {"id": 12, "date": "2026-01-13", "day_of_week": "Tue", "month": "Jan 2026", "contract": "ZB", "sector": "Bonds", "direction": "SHORT", "conviction": "HIGH", "entry": 114.92, "stop": 129.83, "target": 73.17, "rr": 2.8, "risk_amt": 1491.0, "outcome": "WIN", "pnl": 4175.0, "portfolio_value": 103585.0, "roi_pct": 3.58, "note": "MACD confirmation on entry"}, {"id": 13, "date": "2026-01-13", "day_of_week": "Tue", "month": "Jan 2026", "contract": "ES", "sector": "Equity", "direction": "LONG", "conviction": "HIGH", "entry": 5811.68, "stop": 5780.6, "target": 5886.27, "rr": 2.4, "risk_amt": 1554.0, "outcome": "LOSS", "pnl": -1554.0, "portfolio_value": 102031.0, "roi_pct": 2.03, "note": "Gap through stop level"}, {"id": 14, "date": "2026-01-14", "day_of_week": "Wed", "month": "Jan 2026", "contract": "CL", "sector": "Energy", "direction": "SHORT", "conviction": "MEDIUM", "entry": 72.11, "stop": 82.31, "target": 37.43, "rr": 3.4, "risk_amt": 1020.0, "outcome": "LOSS", "pnl": -1020.0, "portfolio_value": 101011.0, "roi_pct": 1.01, "note": "False breakout"}, {"id": 15, "date": "2026-01-15", "day_of_week": "Thu", "month": "Jan 2026", "contract": "ZB", "sector": "Bonds", "direction": "SHORT", "conviction": "MEDIUM", "entry": 115.11, "stop": 125.21, "target": 81.78, "rr": 3.3, "risk_amt": 1010.0, "outcome": "LOSS", "pnl": -1010.0, "portfolio_value": 100001.0, "roi_pct": 0.0, "note": "Gap through stop level"}, {"id": 16, "date": "2026-01-16", "day_of_week": "Fri", "month": "Jan 2026", "contract": "ES", "sector": "Equity", "direction": "LONG", "conviction": "HIGH", "entry": 5798.75, "stop": 5768.75, "target": 5861.75, "rr": 2.1, "risk_amt": 1500.0, "outcome": "WIN", "pnl": 3150.0, "portfolio_value": 103151.0, "roi_pct": 3.15, "note": "Support held perfectly"}, {"id": 17, "date": "2026-01-16", "day_of_week": "Fri", "month": "Jan 2026", "contract": "GC", "sector": "Metals", "direction": "LONG", "conviction": "MEDIUM", "entry": 2648.29, "stop": 2637.97, "target": 2682.35, "rr": 3.3, "risk_amt": 1032.0, "outcome": "LOSS", "pnl": -1032.0, "portfolio_value": 102119.0, "roi_pct": 2.12, "note": "Gap through stop level"}, {"id": 18, "date": "2026-01-20", "day_of_week": "Tue", "month": "Jan 2026", "contract": "GC", "sector": "Metals", "direction": "LONG", "conviction": "MEDIUM", "entry": 2652.35, "stop": 2642.14, "target": 2675.83, "rr": 2.3, "risk_amt": 1021.0, "outcome": "LOSS", "pnl": -1021.0, "portfolio_value": 101098.0, "roi_pct": 1.1, "note": "Stop triggered on news spike"}, {"id": 19, "date": "2026-01-20", "day_of_week": "Tue", "month": "Jan 2026", "contract": "NQ", "sector": "Equity", "direction": "LONG", "conviction": "HIGH", "entry": 20478.38, "stop": 20402.58, "target": 20637.56, "rr": 2.1, "risk_amt": 1516.0, "outcome": "LOSS", "pnl": -1516.0, "portfolio_value": 99582.0, "roi_pct": -0.42, "note": "False breakout"}, {"id": 20, "date": "2026-01-21", "day_of_week": "Wed", "month": "Jan 2026", "contract": "CL", "sector": "Energy", "direction": "SHORT", "conviction": "MEDIUM", "entry": 71.96, "stop": 81.92, "target": 49.05, "rr": 2.3, "risk_amt": 996.0, "outcome": "WIN", "pnl": 2291.0, "portfolio_value": 101873.0, "roi_pct": 1.87, "note": "Volume surge confirmed move"}, {"id": 21, "date": "2026-01-21", "day_of_week": "Wed", "month": "Jan 2026", "contract": "ES", "sector": "Equity", "direction": "LONG", "conviction": "HIGH", "entry": 5797.69, "stop": 5767.13, "target": 5898.54, "rr": 3.3, "risk_amt": 1528.0, "outcome": "LOSS", "pnl": -1528.0, "portfolio_value": 100345.0, "roi_pct": 0.34, "note": "False breakout"}, {"id": 22, "date": "2026-01-22", "day_of_week": "Thu", "month": "Jan 2026", "contract": "ES", "sector": "Equity", "direction": "LONG", "conviction": "HIGH", "entry": 5799.57, "stop": 5769.47, "target": 5874.82, "rr": 2.5, "risk_amt": 1505.0, "outcome": "LOSS", "pnl": -1505.0, "portfolio_value": 98840.0, "roi_pct": -1.16, "note": "False breakout"}, {"id": 23, "date": "2026-01-22", "day_of_week": "Thu", "month": "Jan 2026", "contract": "GC", "sector": "Metals", "direction": "LONG", "conviction": "MEDIUM", "entry": 2648.18, "stop": 2638.3, "target": 2673.87, "rr": 2.6, "risk_amt": 988.0, "outcome": "WIN", "pnl": 2569.0, "portfolio_value": 101409.0, "roi_pct": 1.41, "note": "Support held perfectly"}, {"id": 24, "date": "2026-01-22", "day_of_week": "Thu", "month": "Jan 2026", "contract": "CL", "sector": "Energy", "direction": "SHORT", "conviction": "MEDIUM", "entry": 72.08, "stop": 82.22, "target": 41.66, "rr": 3.0, "risk_amt": 1014.0, "outcome": "LOSS", "pnl": -1014.0, "portfolio_value": 100395.0, "roi_pct": 0.4, "note": "Stop triggered on news spike"}, {"id": 25, "date": "2026-01-23", "day_of_week": "Fri", "month": "Jan 2026", "contract": "YM", "sector": "Equity", "direction": "LONG", "conviction": "HIGH", "entry": 42082.48, "stop": 41781.28, "target": 42684.88, "rr": 2.0, "risk_amt": 1506.0, "outcome": "LOSS", "pnl": -1506.0, "portfolio_value": 98889.0, "roi_pct": -1.11, "note": "False breakout"}, {"id": 26, "date": "2026-01-26", "day_of_week": "Mon", "month": "Jan 2026", "contract": "CL", "sector": "Energy", "direction": "SHORT", "conviction": "MEDIUM", "entry": 72.12, "stop": 82.01, "target": 38.49, "rr": 3.4, "risk_amt": 989.0, "outcome": "LOSS", "pnl": -989.0, "portfolio_value": 97900.0, "roi_pct": -2.1, "note": "Spread wider than expected"}, {"id": 27, "date": "2026-01-26", "day_of_week": "Mon", "month": "Jan 2026", "contract": "ZN", "sector": "Bonds", "direction": "SHORT", "conviction": "MEDIUM", "entry": 109.04, "stop": 118.83, "target": 81.63, "rr": 2.8, "risk_amt": 979.0, "outcome": "WIN", "pnl": 2741.0, "portfolio_value": 100641.0, "roi_pct": 0.64, "note": "MACD confirmation on entry"}, {"id": 28, "date": "2026-01-27", "day_of_week": "Tue", "month": "Jan 2026", "contract": "CL", "sector": "Energy", "direction": "SHORT", "conviction": "HIGH", "entry": 72.17, "stop": 87.27, "target": 40.46, "rr": 2.1, "risk_amt": 1510.0, "outcome": "LOSS", "pnl": -1510.0, "portfolio_value": 99131.0, "roi_pct": -0.87, "note": "Reversal at resistance"}, {"id": 29, "date": "2026-01-27", "day_of_week": "Tue", "month": "Jan 2026", "contract": "ZB", "sector": "Bonds", "direction": "SHORT", "conviction": "MEDIUM", "entry": 115.1, "stop": 125.01, "target": 82.4, "rr": 3.3, "risk_amt": 991.0, "outcome": "LOSS", "pnl": -991.0, "portfolio_value": 98140.0, "roi_pct": -1.86, "note": "Reversal at resistance"}, {"id": 30, "date": "2026-01-27", "day_of_week": "Tue", "month": "Jan 2026", "contract": "NQ", "sector": "Equity", "direction": "LONG", "conviction": "HIGH", "entry": 20548.65, "stop": 20475.05, "target": 20725.29, "rr": 2.4, "risk_amt": 1472.0, "outcome": "BE", "pnl": 0.0, "portfolio_value": 98140.0, "roi_pct": -1.86, "note": "Moved stop to break-even"}, {"id": 31, "date": "2026-01-28", "day_of_week": "Wed", "month": "Jan 2026", "contract": "ZB", "sector": "Bonds", "direction": "SHORT", "conviction": "HIGH", "entry": 115.04, "stop": 129.76, "target": 69.41, "rr": 3.1, "risk_amt": 1472.0, "outcome": "LOSS", "pnl": -1472.0, "portfolio_value": 96668.0, "roi_pct": -3.33, "note": "Spread wider than expected"}, {"id": 32, "date": "2026-01-28", "day_of_week": "Wed", "month": "Jan 2026", "contract": "NQ", "sector": "Equity", "direction": "LONG", "conviction": "HIGH", "entry": 20509.09, "stop": 20436.59, "target": 20733.84, "rr": 3.1, "risk_amt": 1450.0, "outcome": "LOSS", "pnl": -1450.0, "portfolio_value": 95218.0, "roi_pct": -4.78, "note": "Stop triggered on news spike"}, {"id": 33, "date": "2026-01-28", "day_of_week": "Wed", "month": "Jan 2026", "contract": "CL", "sector": "Energy", "direction": "SHORT", "conviction": "MEDIUM", "entry": 72.04, "stop": 81.56, "target": 49.19, "rr": 2.4, "risk_amt": 952.0, "outcome": "WIN", "pnl": 2285.0, "portfolio_value": 97503.0, "roi_pct": -2.5, "note": "Volume surge confirmed move"}, {"id": 34, "date": "2026-01-29", "day_of_week": "Thu", "month": "Jan 2026", "contract": "ES", "sector": "Equity", "direction": "LONG", "conviction": "HIGH", "entry": 5805.55, "stop": 5776.29, "target": 5884.55, "rr": 2.7, "risk_amt": 1463.0, "outcome": "LOSS", "pnl": -1463.0, "portfolio_value": 96040.0, "roi_pct": -3.96, "note": "Reversal at resistance"}, {"id": 35, "date": "2026-01-30", "day_of_week": "Fri", "month": "Jan 2026", "contract": "CL", "sector": "Energy", "direction": "SHORT", "conviction": "HIGH", "entry": 72.09, "stop": 86.5, "target": 28.86, "rr": 3.0, "risk_amt": 1441.0, "outcome": "WIN", "pnl": 4323.0, "portfolio_value": 100363.0, "roi_pct": 0.36, "note": "Clean breakout entry"}, {"id": 36, "date": "2026-01-30", "day_of_week": "Fri", "month": "Jan 2026", "contract": "NQ", "sector": "Equity", "direction": "LONG", "conviction": "HIGH", "entry": 20525.97, "stop": 20450.72, "target": 20706.57, "rr": 2.4, "risk_amt": 1505.0, "outcome": "WIN", "pnl": 3612.0, "portfolio_value": 103975.0, "roi_pct": 3.98, "note": "Support held perfectly"}, {"id": 37, "date": "2026-02-02", "day_of_week": "Mon", "month": "Feb 2026", "contract": "NG", "sector": "Energy", "direction": "LONG", "conviction": "HIGH", "entry": 2.8, "stop": 1.24, "target": 7.32, "rr": 2.9, "risk_amt": 1560.0, "outcome": "WIN", "pnl": 4524.0, "portfolio_value": 108499.0, "roi_pct": 8.5, "note": "Clean breakout entry"}, {"id": 38, "date": "2026-02-02", "day_of_week": "Mon", "month": "Feb 2026", "contract": "NQ", "sector": "Equity", "direction": "LONG", "conviction": "MEDIUM", "entry": 20522.12, "stop": 20467.87, "target": 20706.57, "rr": 3.4, "risk_amt": 1085.0, "outcome": "LOSS", "pnl": -1085.0, "portfolio_value": 107414.0, "roi_pct": 7.41, "note": "Gap through stop level"}, {"id": 39, "date": "2026-02-02", "day_of_week": "Mon", "month": "Feb 2026", "contract": "CL", "sector": "Energy", "direction": "SHORT", "conviction": "MEDIUM", "entry": 72.02, "stop": 82.76, "target": 35.5, "rr": 3.4, "risk_amt": 1074.0, "outcome": "LOSS", "pnl": -1074.0, "portfolio_value": 106340.0, "roi_pct": 6.34, "note": "Spread wider than expected"}, {"id": 40, "date": "2026-02-03", "day_of_week": "Tue", "month": "Feb 2026", "contract": "ZB", "sector": "Bonds", "direction": "SHORT", "conviction": "MEDIUM", "entry": 114.97, "stop": 125.6, "target": 85.21, "rr": 2.8, "risk_amt": 1063.0, "outcome": "BE", "pnl": -20.0, "portfolio_value": 106320.0, "roi_pct": 6.32, "note": "Exited early on reversal signal"}, {"id": 41, "date": "2026-02-04", "day_of_week": "Wed", "month": "Feb 2026", "contract": "NG", "sector": "Energy", "direction": "LONG", "conviction": "HIGH", "entry": 2.81, "stop": 1.22, "target": 6.64, "rr": 2.4, "risk_amt": 1595.0, "outcome": "LOSS", "pnl": -1595.0, "portfolio_value": 104725.0, "roi_pct": 4.72, "note": "Reversal at resistance"}, {"id": 42, "date": "2026-02-04", "day_of_week": "Wed", "month": "Feb 2026", "contract": "NQ", "sector": "Equity", "direction": "LONG", "conviction": "MEDIUM", "entry": 20511.39, "stop": 20459.04, "target": 20616.09, "rr": 2.0, "risk_amt": 1047.0, "outcome": "LOSS", "pnl": -1047.0, "portfolio_value": 103678.0, "roi_pct": 3.68, "note": "Spread wider than expected"}, {"id": 43, "date": "2026-02-04", "day_of_week": "Wed", "month": "Feb 2026", "contract": "ES", "sector": "Equity", "direction": "LONG", "conviction": "MEDIUM", "entry": 5811.19, "stop": 5790.45, "target": 5860.97, "rr": 2.4, "risk_amt": 1037.0, "outcome": "LOSS", "pnl": -1037.0, "portfolio_value": 102641.0, "roi_pct": 2.64, "note": "Gap through stop level"}, {"id": 44, "date": "2026-02-05", "day_of_week": "Thu", "month": "Feb 2026", "contract": "CL", "sector": "Energy", "direction": "SHORT", "conviction": "MEDIUM", "entry": 72.27, "stop": 82.53, "target": 43.54, "rr": 2.8, "risk_amt": 1026.0, "outcome": "WIN", "pnl": 2873.0, "portfolio_value": 105514.0, "roi_pct": 5.51, "note": "Volume surge confirmed move"}, {"id": 45, "date": "2026-02-05", "day_of_week": "Thu", "month": "Feb 2026", "contract": "ZB", "sector": "Bonds", "direction": "SHORT", "conviction": "MEDIUM", "entry": 115.08, "stop": 125.63, "target": 88.7, "rr": 2.5, "risk_amt": 1055.0, "outcome": "LOSS", "pnl": -1055.0, "portfolio_value": 104459.0, "roi_pct": 4.46, "note": "False breakout"}, {"id": 46, "date": "2026-02-05", "day_of_week": "Thu", "month": "Feb 2026", "contract": "GC", "sector": "Metals", "direction": "LONG", "conviction": "MEDIUM", "entry": 2656.68, "stop": 2646.23, "target": 2682.8, "rr": 2.5, "risk_amt": 1045.0, "outcome": "LOSS", "pnl": -1045.0, "portfolio_value": 103414.0, "roi_pct": 3.41, "note": "False breakout"}, {"id": 47, "date": "2026-02-06", "day_of_week": "Fri", "month": "Feb 2026", "contract": "NQ", "sector": "Equity", "direction": "LONG", "conviction": "MEDIUM", "entry": 20543.19, "stop": 20491.49, "target": 20713.8, "rr": 3.3, "risk_amt": 1034.0, "outcome": "LOSS", "pnl": -1034.0, "portfolio_value": 102380.0, "roi_pct": 2.38, "note": "Reversal at resistance"}, {"id": 48, "date": "2026-02-09", "day_of_week": "Mon", "month": "Feb 2026", "contract": "GC", "sector": "Metals", "direction": "LONG", "conviction": "MEDIUM", "entry": 2656.46, "stop": 2646.22, "target": 2685.13, "rr": 2.8, "risk_amt": 1024.0, "outcome": "LOSS", "pnl": -1024.0, "portfolio_value": 101356.0, "roi_pct": 1.36, "note": "Gap through stop level"}, {"id": 49, "date": "2026-02-09", "day_of_week": "Mon", "month": "Feb 2026", "contract": "NG", "sector": "Energy", "direction": "LONG", "conviction": "MEDIUM", "entry": 2.81, "stop": 1.8, "target": 5.55, "rr": 2.7, "risk_amt": 1014.0, "outcome": "LOSS", "pnl": -1014.0, "portfolio_value": 100342.0, "roi_pct": 0.34, "note": "Spread wider than expected"}, {"id": 50, "date": "2026-02-10", "day_of_week": "Tue", "month": "Feb 2026", "contract": "GC", "sector": "Metals", "direction": "LONG", "conviction": "MEDIUM", "entry": 2657.54, "stop": 2647.51, "target": 2681.61, "rr": 2.4, "risk_amt": 1003.0, "outcome": "WIN", "pnl": 2407.0, "portfolio_value": 102749.0, "roi_pct": 2.75, "note": "MACD confirmation on entry"}, {"id": 51, "date": "2026-02-10", "day_of_week": "Tue", "month": "Feb 2026", "contract": "NQ", "sector": "Equity", "direction": "LONG", "conviction": "HIGH", "entry": 20551.61, "stop": 20474.56, "target": 20782.76, "rr": 3.0, "risk_amt": 1541.0, "outcome": "LOSS", "pnl": -1541.0, "portfolio_value": 101208.0, "roi_pct": 1.21, "note": "False breakout"}, {"id": 52, "date": "2026-02-11", "day_of_week": "Wed", "month": "Feb 2026", "contract": "GC", "sector": "Metals", "direction": "LONG", "conviction": "MEDIUM", "entry": 2657.97, "stop": 2647.85, "target": 2685.29, "rr": 2.7, "risk_amt": 1012.0, "outcome": "LOSS", "pnl": -1012.0, "portfolio_value": 100196.0, "roi_pct": 0.2, "note": "Gap through stop level"}, {"id": 53, "date": "2026-02-11", "day_of_week": "Wed", "month": "Feb 2026", "contract": "NG", "sector": "Energy", "direction": "LONG", "conviction": "MEDIUM", "entry": 2.81, "stop": 1.81, "target": 4.81, "rr": 2.0, "risk_amt": 1002.0, "outcome": "WIN", "pnl": 2004.0, "portfolio_value": 102200.0, "roi_pct": 2.2, "note": "Volume surge confirmed move"}, {"id": 54, "date": "2026-02-12", "day_of_week": "Thu", "month": "Feb 2026", "contract": "ES", "sector": "Equity", "direction": "LONG", "conviction": "MEDIUM", "entry": 5810.25, "stop": 5789.81, "target": 5855.22, "rr": 2.2, "risk_amt": 1022.0, "outcome": "WIN", "pnl": 2248.0, "portfolio_value": 104448.0, "roi_pct": 4.45, "note": "MACD confirmation on entry"}, {"id": 55, "date": "2026-02-12", "day_of_week": "Thu", "month": "Feb 2026", "contract": "ZB", "sector": "Bonds", "direction": "SHORT", "conviction": "MEDIUM", "entry": 115.03, "stop": 125.47, "target": 83.71, "rr": 3.0, "risk_amt": 1044.0, "outcome": "LOSS", "pnl": -1044.0, "portfolio_value": 103404.0, "roi_pct": 3.4, "note": "Stop triggered on news spike"}, {"id": 56, "date": "2026-02-13", "day_of_week": "Fri", "month": "Feb 2026", "contract": "YM", "sector": "Equity", "direction": "LONG", "conviction": "MEDIUM", "entry": 42170.73, "stop": 41963.93, "target": 42729.09, "rr": 2.7, "risk_amt": 1034.0, "outcome": "LOSS", "pnl": -1034.0, "portfolio_value": 102370.0, "roi_pct": 2.37, "note": "Gap through stop level"}, {"id": 57, "date": "2026-02-13", "day_of_week": "Fri", "month": "Feb 2026", "contract": "ES", "sector": "Equity", "direction": "LONG", "conviction": "HIGH", "entry": 5801.32, "stop": 5770.6, "target": 5896.55, "rr": 3.1, "risk_amt": 1536.0, "outcome": "WIN", "pnl": 4762.0, "portfolio_value": 107132.0, "roi_pct": 7.13, "note": "MACD confirmation on entry"}, {"id": 58, "date": "2026-02-17", "day_of_week": "Tue", "month": "Feb 2026", "contract": "ZB", "sector": "Bonds", "direction": "SHORT", "conviction": "MEDIUM", "entry": 115.17, "stop": 125.88, "target": 85.18, "rr": 2.8, "risk_amt": 1071.0, "outcome": "LOSS", "pnl": -1071.0, "portfolio_value": 106061.0, "roi_pct": 6.06, "note": "Reversal at resistance"}, {"id": 59, "date": "2026-02-18", "day_of_week": "Wed", "month": "Feb 2026", "contract": "CL", "sector": "Energy", "direction": "SHORT", "conviction": "MEDIUM", "entry": 72.1, "stop": 82.71, "target": 36.03, "rr": 3.4, "risk_amt": 1061.0, "outcome": "LOSS", "pnl": -1061.0, "portfolio_value": 105000.0, "roi_pct": 5.0, "note": "Reversal at resistance"}, {"id": 60, "date": "2026-02-18", "day_of_week": "Wed", "month": "Feb 2026", "contract": "NQ", "sector": "Equity", "direction": "LONG", "conviction": "HIGH", "entry": 20547.62, "stop": 20468.87, "target": 20807.49, "rr": 3.3, "risk_amt": 1575.0, "outcome": "LOSS", "pnl": -1575.0, "portfolio_value": 103425.0, "roi_pct": 3.43, "note": "Reversal at resistance"}, {"id": 61, "date": "2026-02-19", "day_of_week": "Thu", "month": "Feb 2026", "contract": "GC", "sector": "Metals", "direction": "LONG", "conviction": "MEDIUM", "entry": 2657.89, "stop": 2647.55, "target": 2679.6, "rr": 2.1, "risk_amt": 1034.0, "outcome": "LOSS", "pnl": -1034.0, "portfolio_value": 102391.0, "roi_pct": 2.39, "note": "Reversal at resistance"}, {"id": 62, "date": "2026-02-19", "day_of_week": "Thu", "month": "Feb 2026", "contract": "ES", "sector": "Equity", "direction": "LONG", "conviction": "MEDIUM", "entry": 5818.45, "stop": 5797.97, "target": 5861.46, "rr": 2.1, "risk_amt": 1024.0, "outcome": "WIN", "pnl": 2150.0, "portfolio_value": 104541.0, "roi_pct": 4.54, "note": "Volume surge confirmed move"}, {"id": 63, "date": "2026-02-20", "day_of_week": "Fri", "month": "Feb 2026", "contract": "ZB", "sector": "Bonds", "direction": "SHORT", "conviction": "HIGH", "entry": 115.23, "stop": 130.91, "target": 82.3, "rr": 2.1, "risk_amt": 1568.0, "outcome": "LOSS", "pnl": -1568.0, "portfolio_value": 102973.0, "roi_pct": 2.97, "note": "False breakout"}, {"id": 64, "date": "2026-02-20", "day_of_week": "Fri", "month": "Feb 2026", "contract": "CL", "sector": "Energy", "direction": "SHORT", "conviction": "HIGH", "entry": 72.09, "stop": 87.54, "target": 28.83, "rr": 2.8, "risk_amt": 1545.0, "outcome": "LOSS", "pnl": -1545.0, "portfolio_value": 101428.0, "roi_pct": 1.43, "note": "Stop triggered on news spike"}, {"id": 65, "date": "2026-02-23", "day_of_week": "Mon", "month": "Feb 2026", "contract": "NQ", "sector": "Equity", "direction": "LONG", "conviction": "MEDIUM", "entry": 20593.02, "stop": 20542.32, "target": 20770.47, "rr": 3.5, "risk_amt": 1014.0, "outcome": "WIN", "pnl": 3549.0, "portfolio_value": 104977.0, "roi_pct": 4.98, "note": "Support held perfectly"}, {"id": 66, "date": "2026-02-23", "day_of_week": "Mon", "month": "Feb 2026", "contract": "GC", "sector": "Metals", "direction": "LONG", "conviction": "MEDIUM", "entry": 2662.42, "stop": 2651.92, "target": 2690.77, "rr": 2.7, "risk_amt": 1050.0, "outcome": "WIN", "pnl": 2835.0, "portfolio_value": 107812.0, "roi_pct": 7.81, "note": "MACD confirmation on entry"}, {"id": 67, "date": "2026-02-24", "day_of_week": "Tue", "month": "Feb 2026", "contract": "CL", "sector": "Energy", "direction": "SHORT", "conviction": "MEDIUM", "entry": 72.25, "stop": 83.03, "target": 46.38, "rr": 2.4, "risk_amt": 1078.0, "outcome": "LOSS", "pnl": -1078.0, "portfolio_value": 106734.0, "roi_pct": 6.73, "note": "False breakout"}, {"id": 68, "date": "2026-02-25", "day_of_week": "Wed", "month": "Feb 2026", "contract": "ES", "sector": "Equity", "direction": "LONG", "conviction": "MEDIUM", "entry": 5808.42, "stop": 5787.08, "target": 5868.17, "rr": 2.8, "risk_amt": 1067.0, "outcome": "WIN", "pnl": 2988.0, "portfolio_value": 109722.0, "roi_pct": 9.72, "note": "MACD confirmation on entry"}, {"id": 69, "date": "2026-02-25", "day_of_week": "Wed", "month": "Feb 2026", "contract": "GC", "sector": "Metals", "direction": "LONG", "conviction": "MEDIUM", "entry": 2661.33, "stop": 2650.36, "target": 2699.72, "rr": 3.5, "risk_amt": 1097.0, "outcome": "WIN", "pnl": 3840.0, "portfolio_value": 113562.0, "roi_pct": 13.56, "note": "Clean breakout entry"}, {"id": 70, "date": "2026-02-26", "day_of_week": "Thu", "month": "Feb 2026", "contract": "NQ", "sector": "Equity", "direction": "LONG", "conviction": "HIGH", "entry": 20594.66, "stop": 20509.51, "target": 20850.11, "rr": 3.0, "risk_amt": 1703.0, "outcome": "LOSS", "pnl": -1703.0, "portfolio_value": 111859.0, "roi_pct": 11.86, "note": "Spread wider than expected"}, {"id": 71, "date": "2026-02-26", "day_of_week": "Thu", "month": "Feb 2026", "contract": "CL", "sector": "Energy", "direction": "SHORT", "conviction": "MEDIUM", "entry": 72.3, "stop": 83.49, "target": 46.56, "rr": 2.3, "risk_amt": 1119.0, "outcome": "WIN", "pnl": 2574.0, "portfolio_value": 114433.0, "roi_pct": 14.43, "note": "Support held perfectly"}, {"id": 72, "date": "2026-02-27", "day_of_week": "Fri", "month": "Feb 2026", "contract": "ES", "sector": "Equity", "direction": "LONG", "conviction": "MEDIUM", "entry": 5826.99, "stop": 5804.11, "target": 5895.63, "rr": 3.0, "risk_amt": 1144.0, "outcome": "LOSS", "pnl": -1144.0, "portfolio_value": 113289.0, "roi_pct": 13.29, "note": "Spread wider than expected"}, {"id": 73, "date": "2026-02-27", "day_of_week": "Fri", "month": "Feb 2026", "contract": "CL", "sector": "Energy", "direction": "SHORT", "conviction": "HIGH", "entry": 72.19, "stop": 89.18, "target": 21.22, "rr": 3.0, "risk_amt": 1699.0, "outcome": "WIN", "pnl": 5097.0, "portfolio_value": 118386.0, "roi_pct": 18.39, "note": "Trend continuation"}, {"id": 74, "date": "2026-03-02", "day_of_week": "Mon", "month": "Mar 2026", "contract": "GC", "sector": "Metals", "direction": "LONG", "conviction": "MEDIUM", "entry": 2661.79, "stop": 2649.95, "target": 2686.65, "rr": 2.1, "risk_amt": 1184.0, "outcome": "LOSS", "pnl": -1184.0, "portfolio_value": 117202.0, "roi_pct": 17.2, "note": "False breakout"}, {"id": 75, "date": "2026-03-02", "day_of_week": "Mon", "month": "Mar 2026", "contract": "ZB", "sector": "Bonds", "direction": "SHORT", "conviction": "MEDIUM", "entry": 115.54, "stop": 127.26, "target": 78.04, "rr": 3.2, "risk_amt": 1172.0, "outcome": "LOSS", "pnl": -1172.0, "portfolio_value": 116030.0, "roi_pct": 16.03, "note": "False breakout"}, {"id": 76, "date": "2026-03-02", "day_of_week": "Mon", "month": "Mar 2026", "contract": "ES", "sector": "Equity", "direction": "SHORT", "conviction": "HIGH", "entry": 5823.35, "stop": 5858.15, "target": 5701.55, "rr": 3.5, "risk_amt": 1740.0, "outcome": "LOSS", "pnl": -1740.0, "portfolio_value": 114290.0, "roi_pct": 14.29, "note": "Stop triggered on news spike"}, {"id": 77, "date": "2026-03-03", "day_of_week": "Tue", "month": "Mar 2026", "contract": "GC", "sector": "Metals", "direction": "LONG", "conviction": "MEDIUM", "entry": 2667.62, "stop": 2656.19, "target": 2706.48, "rr": 3.4, "risk_amt": 1143.0, "outcome": "WIN", "pnl": 3886.0, "portfolio_value": 118176.0, "roi_pct": 18.18, "note": "Volume surge confirmed move"}, {"id": 78, "date": "2026-03-04", "day_of_week": "Wed", "month": "Mar 2026", "contract": "NQ", "sector": "Equity", "direction": "SHORT", "conviction": "HIGH", "entry": 20612.14, "stop": 20700.79, "target": 20381.65, "rr": 2.6, "risk_amt": 1773.0, "outcome": "LOSS", "pnl": -1773.0, "portfolio_value": 116403.0, "roi_pct": 16.4, "note": "Reversal at resistance"}, {"id": 79, "date": "2026-03-04", "day_of_week": "Wed", "month": "Mar 2026", "contract": "GC", "sector": "Metals", "direction": "LONG", "conviction": "MEDIUM", "entry": 2666.04, "stop": 2654.4, "target": 2690.48, "rr": 2.1, "risk_amt": 1164.0, "outcome": "LOSS", "pnl": -1164.0, "portfolio_value": 115239.0, "roi_pct": 15.24, "note": "Gap through stop level"}, {"id": 80, "date": "2026-03-05", "day_of_week": "Thu", "month": "Mar 2026", "contract": "GC", "sector": "Metals", "direction": "LONG", "conviction": "MEDIUM", "entry": 2659.98, "stop": 2648.46, "target": 2684.17, "rr": 2.1, "risk_amt": 1152.0, "outcome": "LOSS", "pnl": -1152.0, "portfolio_value": 114087.0, "roi_pct": 14.09, "note": "Spread wider than expected"}, {"id": 81, "date": "2026-03-05", "day_of_week": "Thu", "month": "Mar 2026", "contract": "SI", "sector": "Metals", "direction": "LONG", "conviction": "MEDIUM", "entry": 30.17, "stop": 27.89, "target": 37.47, "rr": 3.2, "risk_amt": 1141.0, "outcome": "LOSS", "pnl": -1141.0, "portfolio_value": 112946.0, "roi_pct": 12.95, "note": "Spread wider than expected"}, {"id": 82, "date": "2026-03-06", "day_of_week": "Fri", "month": "Mar 2026", "contract": "GC", "sector": "Metals", "direction": "LONG", "conviction": "MEDIUM", "entry": 2669.1, "stop": 2657.81, "target": 2701.84, "rr": 2.9, "risk_amt": 1129.0, "outcome": "LOSS", "pnl": -1129.0, "portfolio_value": 111817.0, "roi_pct": 11.82, "note": "Gap through stop level"}, {"id": 83, "date": "2026-03-06", "day_of_week": "Fri", "month": "Mar 2026", "contract": "ES", "sector": "Equity", "direction": "SHORT", "conviction": "HIGH", "entry": 5838.44, "stop": 5871.98, "target": 5741.17, "rr": 2.9, "risk_amt": 1677.0, "outcome": "BE", "pnl": 36.0, "portfolio_value": 111853.0, "roi_pct": 11.85, "note": "Exited early on reversal signal"}, {"id": 84, "date": "2026-03-09", "day_of_week": "Mon", "month": "Mar 2026", "contract": "NG", "sector": "Energy", "direction": "SHORT", "conviction": "MEDIUM", "entry": 2.81, "stop": 3.93, "target": -0.1, "rr": 2.6, "risk_amt": 1119.0, "outcome": "WIN", "pnl": 2909.0, "portfolio_value": 114762.0, "roi_pct": 14.76, "note": "Support held perfectly"}, {"id": 85, "date": "2026-03-10", "day_of_week": "Tue", "month": "Mar 2026", "contract": "NG", "sector": "Energy", "direction": "SHORT", "conviction": "HIGH", "entry": 2.81, "stop": 4.53, "target": -2.53, "rr": 3.1, "risk_amt": 1721.0, "outcome": "WIN", "pnl": 5335.0, "portfolio_value": 120097.0, "roi_pct": 20.1, "note": "Support held perfectly"}, {"id": 86, "date": "2026-03-10", "day_of_week": "Tue", "month": "Mar 2026", "contract": "GC", "sector": "Metals", "direction": "LONG", "conviction": "MEDIUM", "entry": 2661.31, "stop": 2649.3, "target": 2697.34, "rr": 3.0, "risk_amt": 1201.0, "outcome": "LOSS", "pnl": -1201.0, "portfolio_value": 118896.0, "roi_pct": 18.9, "note": "False breakout"}, {"id": 87, "date": "2026-03-10", "day_of_week": "Tue", "month": "Mar 2026", "contract": "ZB", "sector": "Bonds", "direction": "SHORT", "conviction": "MEDIUM", "entry": 115.44, "stop": 127.33, "target": 73.82, "rr": 3.5, "risk_amt": 1189.0, "outcome": "WIN", "pnl": 4162.0, "portfolio_value": 123058.0, "roi_pct": 23.06, "note": "Trend continuation"}, {"id": 88, "date": "2026-03-11", "day_of_week": "Wed", "month": "Mar 2026", "contract": "ES", "sector": "Equity", "direction": "SHORT", "conviction": "HIGH", "entry": 5827.16, "stop": 5864.08, "target": 5727.48, "rr": 2.7, "risk_amt": 1846.0, "outcome": "BE", "pnl": -87.0, "portfolio_value": 122971.0, "roi_pct": 22.97, "note": "Exited early on reversal signal"}, {"id": 89, "date": "2026-03-11", "day_of_week": "Wed", "month": "Mar 2026", "contract": "NG", "sector": "Energy", "direction": "SHORT", "conviction": "MEDIUM", "entry": 2.81, "stop": 4.04, "target": -0.88, "rr": 3.0, "risk_amt": 1230.0, "outcome": "WIN", "pnl": 3690.0, "portfolio_value": 126661.0, "roi_pct": 26.66, "note": "Support held perfectly"}, {"id": 90, "date": "2026-03-11", "day_of_week": "Wed", "month": "Mar 2026", "contract": "NQ", "sector": "Equity", "direction": "SHORT", "conviction": "HIGH", "entry": 20617.34, "stop": 20712.34, "target": 20398.84, "rr": 2.3, "risk_amt": 1900.0, "outcome": "LOSS", "pnl": -1900.0, "portfolio_value": 124761.0, "roi_pct": 24.76, "note": "Spread wider than expected"}, {"id": 91, "date": "2026-03-12", "day_of_week": "Thu", "month": "Mar 2026", "contract": "CL", "sector": "Energy", "direction": "SHORT", "conviction": "MEDIUM", "entry": 72.25, "stop": 84.73, "target": 41.05, "rr": 2.5, "risk_amt": 1248.0, "outcome": "LOSS", "pnl": -1248.0, "portfolio_value": 123513.0, "roi_pct": 23.51, "note": "Stop triggered on news spike"}, {"id": 92, "date": "2026-03-13", "day_of_week": "Fri", "month": "Mar 2026", "contract": "GC", "sector": "Metals", "direction": "LONG", "conviction": "MEDIUM", "entry": 2663.76, "stop": 2651.41, "target": 2697.11, "rr": 2.7, "risk_amt": 1235.0, "outcome": "LOSS", "pnl": -1235.0, "portfolio_value": 122278.0, "roi_pct": 22.28, "note": "Spread wider than expected"}, {"id": 93, "date": "2026-03-16", "day_of_week": "Mon", "month": "Mar 2026", "contract": "NQ", "sector": "Equity", "direction": "SHORT", "conviction": "HIGH", "entry": 20558.8, "stop": 20650.5, "target": 20329.55, "rr": 2.5, "risk_amt": 1834.0, "outcome": "LOSS", "pnl": -1834.0, "portfolio_value": 120444.0, "roi_pct": 20.44, "note": "Stop triggered on news spike"}, {"id": 94, "date": "2026-03-16", "day_of_week": "Mon", "month": "Mar 2026", "contract": "SI", "sector": "Metals", "direction": "LONG", "conviction": "MEDIUM", "entry": 30.09, "stop": 27.68, "target": 37.8, "rr": 3.2, "risk_amt": 1204.0, "outcome": "LOSS", "pnl": -1204.0, "portfolio_value": 119240.0, "roi_pct": 19.24, "note": "False breakout"}, {"id": 95, "date": "2026-03-17", "day_of_week": "Tue", "month": "Mar 2026", "contract": "SI", "sector": "Metals", "direction": "LONG", "conviction": "MEDIUM", "entry": 30.18, "stop": 27.8, "target": 37.57, "rr": 3.1, "risk_amt": 1192.0, "outcome": "LOSS", "pnl": -1192.0, "portfolio_value": 118048.0, "roi_pct": 18.05, "note": "Spread wider than expected"}, {"id": 96, "date": "2026-03-18", "day_of_week": "Wed", "month": "Mar 2026", "contract": "CL", "sector": "Energy", "direction": "SHORT", "conviction": "MEDIUM", "entry": 72.24, "stop": 84.04, "target": 42.74, "rr": 2.5, "risk_amt": 1180.0, "outcome": "LOSS", "pnl": -1180.0, "portfolio_value": 116868.0, "roi_pct": 16.87, "note": "Reversal at resistance"}, {"id": 97, "date": "2026-03-19", "day_of_week": "Thu", "month": "Mar 2026", "contract": "SI", "sector": "Metals", "direction": "LONG", "conviction": "MEDIUM", "entry": 30.19, "stop": 27.85, "target": 35.1, "rr": 2.1, "risk_amt": 1169.0, "outcome": "LOSS", "pnl": -1169.0, "portfolio_value": 115699.0, "roi_pct": 15.7, "note": "Gap through stop level"}, {"id": 98, "date": "2026-03-20", "day_of_week": "Fri", "month": "Mar 2026", "contract": "ES", "sector": "Equity", "direction": "SHORT", "conviction": "HIGH", "entry": 5819.4, "stop": 5854.1, "target": 5708.36, "rr": 3.2, "risk_amt": 1735.0, "outcome": "WIN", "pnl": 5552.0, "portfolio_value": 121251.0, "roi_pct": 21.25, "note": "MACD confirmation on entry"}, {"id": 99, "date": "2026-03-20", "day_of_week": "Fri", "month": "Mar 2026", "contract": "CL", "sector": "Energy", "direction": "SHORT", "conviction": "MEDIUM", "entry": 72.41, "stop": 84.54, "target": 38.45, "rr": 2.8, "risk_amt": 1213.0, "outcome": "WIN", "pnl": 3396.0, "portfolio_value": 124647.0, "roi_pct": 24.65, "note": "Clean breakout entry"}, {"id": 100, "date": "2026-03-23", "day_of_week": "Mon", "month": "Mar 2026", "contract": "ZB", "sector": "Bonds", "direction": "SHORT", "conviction": "HIGH", "entry": 115.67, "stop": 134.37, "target": 67.05, "rr": 2.6, "risk_amt": 1870.0, "outcome": "WIN", "pnl": 4862.0, "portfolio_value": 129509.0, "roi_pct": 29.51, "note": "Support held perfectly"}, {"id": 101, "date": "2026-03-23", "day_of_week": "Mon", "month": "Mar 2026", "contract": "NQ", "sector": "Equity", "direction": "SHORT", "conviction": "HIGH", "entry": 20567.35, "stop": 20664.5, "target": 20256.47, "rr": 3.2, "risk_amt": 1943.0, "outcome": "WIN", "pnl": 6218.0, "portfolio_value": 135727.0, "roi_pct": 35.73, "note": "MACD confirmation on entry"}, {"id": 102, "date": "2026-03-24", "day_of_week": "Tue", "month": "Mar 2026", "contract": "SI", "sector": "Metals", "direction": "LONG", "conviction": "MEDIUM", "entry": 30.07, "stop": 27.36, "target": 36.58, "rr": 2.4, "risk_amt": 1357.0, "outcome": "LOSS", "pnl": -1357.0, "portfolio_value": 134370.0, "roi_pct": 34.37, "note": "Reversal at resistance"}, {"id": 103, "date": "2026-03-24", "day_of_week": "Tue", "month": "Mar 2026", "contract": "ZB", "sector": "Bonds", "direction": "SHORT", "conviction": "MEDIUM", "entry": 115.57, "stop": 129.01, "target": 77.94, "rr": 2.8, "risk_amt": 1344.0, "outcome": "LOSS", "pnl": -1344.0, "portfolio_value": 133026.0, "roi_pct": 33.03, "note": "Spread wider than expected"}, {"id": 104, "date": "2026-03-25", "day_of_week": "Wed", "month": "Mar 2026", "contract": "ES", "sector": "Equity", "direction": "SHORT", "conviction": "HIGH", "entry": 5813.17, "stop": 5853.07, "target": 5689.48, "rr": 3.1, "risk_amt": 1995.0, "outcome": "WIN", "pnl": 6184.0, "portfolio_value": 139210.0, "roi_pct": 39.21, "note": "Trend continuation"}, {"id": 105, "date": "2026-03-25", "day_of_week": "Wed", "month": "Mar 2026", "contract": "SI", "sector": "Metals", "direction": "LONG", "conviction": "MEDIUM", "entry": 30.15, "stop": 27.37, "target": 38.78, "rr": 3.1, "risk_amt": 1392.0, "outcome": "LOSS", "pnl": -1392.0, "portfolio_value": 137818.0, "roi_pct": 37.82, "note": "Spread wider than expected"}, {"id": 106, "date": "2026-03-26", "day_of_week": "Thu", "month": "Mar 2026", "contract": "SI", "sector": "Metals", "direction": "LONG", "conviction": "MEDIUM", "entry": 30.11, "stop": 27.35, "target": 37.0, "rr": 2.5, "risk_amt": 1378.0, "outcome": "WIN", "pnl": 3445.0, "portfolio_value": 141263.0, "roi_pct": 41.26, "note": "Volume surge confirmed move"}, {"id": 107, "date": "2026-03-27", "day_of_week": "Fri", "month": "Mar 2026", "contract": "NG", "sector": "Energy", "direction": "SHORT", "conviction": "MEDIUM", "entry": 2.81, "stop": 4.22, "target": -1.43, "rr": 3.0, "risk_amt": 1413.0, "outcome": "LOSS", "pnl": -1413.0, "portfolio_value": 139850.0, "roi_pct": 39.85, "note": "Stop triggered on news spike"}, {"id": 108, "date": "2026-03-27", "day_of_week": "Fri", "month": "Mar 2026", "contract": "CL", "sector": "Energy", "direction": "SHORT", "conviction": "MEDIUM", "entry": 72.19, "stop": 86.17, "target": 35.84, "rr": 2.6, "risk_amt": 1398.0, "outcome": "LOSS", "pnl": -1398.0, "portfolio_value": 138452.0, "roi_pct": 38.45, "note": "Spread wider than expected"}, {"id": 109, "date": "2026-03-30", "day_of_week": "Mon", "month": "Mar 2026", "contract": "ZB", "sector": "Bonds", "direction": "SHORT", "conviction": "MEDIUM", "entry": 115.2, "stop": 129.05, "target": 76.42, "rr": 2.8, "risk_amt": 1385.0, "outcome": "LOSS", "pnl": -1385.0, "portfolio_value": 137067.0, "roi_pct": 37.07, "note": "Gap through stop level"}, {"id": 110, "date": "2026-03-30", "day_of_week": "Mon", "month": "Mar 2026", "contract": "CL", "sector": "Energy", "direction": "SHORT", "conviction": "MEDIUM", "entry": 72.14, "stop": 85.85, "target": 28.27, "rr": 3.2, "risk_amt": 1371.0, "outcome": "WIN", "pnl": 4387.0, "portfolio_value": 141454.0, "roi_pct": 41.45, "note": "Support held perfectly"}, {"id": 111, "date": "2026-03-31", "day_of_week": "Tue", "month": "Mar 2026", "contract": "GC", "sector": "Metals", "direction": "LONG", "conviction": "MEDIUM", "entry": 2660.16, "stop": 2646.01, "target": 2704.02, "rr": 3.1, "risk_amt": 1415.0, "outcome": "LOSS", "pnl": -1415.0, "portfolio_value": 140039.0, "roi_pct": 40.04, "note": "Spread wider than expected"}, {"id": 112, "date": "2026-03-31", "day_of_week": "Tue", "month": "Mar 2026", "contract": "SI", "sector": "Metals", "direction": "LONG", "conviction": "MEDIUM", "entry": 30.12, "stop": 27.32, "target": 39.08, "rr": 3.2, "risk_amt": 1400.0, "outcome": "LOSS", "pnl": -1400.0, "portfolio_value": 138639.0, "roi_pct": 38.64, "note": "Reversal at resistance"}, {"id": 113, "date": "2026-04-01", "day_of_week": "Wed", "month": "Apr 2026", "contract": "CL", "sector": "Energy", "direction": "SHORT", "conviction": "HIGH", "entry": 72.25, "stop": 93.05, "target": -0.55, "rr": 3.5, "risk_amt": 2080.0, "outcome": "LOSS", "pnl": -2080.0, "portfolio_value": 136559.0, "roi_pct": 36.56, "note": "Spread wider than expected"}, {"id": 114, "date": "2026-04-02", "day_of_week": "Thu", "month": "Apr 2026", "contract": "ES", "sector": "Equity", "direction": "SHORT", "conviction": "HIGH", "entry": 5828.77, "stop": 5869.73, "target": 5718.18, "rr": 2.7, "risk_amt": 2048.0, "outcome": "LOSS", "pnl": -2048.0, "portfolio_value": 134511.0, "roi_pct": 34.51, "note": "Gap through stop level"}, {"id": 115, "date": "2026-04-02", "day_of_week": "Thu", "month": "Apr 2026", "contract": "NG", "sector": "Energy", "direction": "LONG", "conviction": "MEDIUM", "entry": 2.81, "stop": 1.47, "target": 6.71, "rr": 2.9, "risk_amt": 1345.0, "outcome": "LOSS", "pnl": -1345.0, "portfolio_value": 133166.0, "roi_pct": 33.17, "note": "Stop triggered on news spike"}, {"id": 116, "date": "2026-04-06", "day_of_week": "Mon", "month": "Apr 2026", "contract": "NQ", "sector": "Equity", "direction": "SHORT", "conviction": "HIGH", "entry": 20576.6, "stop": 20676.45, "target": 20287.03, "rr": 2.9, "risk_amt": 1997.0, "outcome": "WIN", "pnl": 5791.0, "portfolio_value": 138957.0, "roi_pct": 38.96, "note": "Volume surge confirmed move"}, {"id": 117, "date": "2026-04-06", "day_of_week": "Mon", "month": "Apr 2026", "contract": "YM", "sector": "Equity", "direction": "SHORT", "conviction": "MEDIUM", "entry": 42150.9, "stop": 42428.9, "target": 41539.3, "rr": 2.2, "risk_amt": 1390.0, "outcome": "LOSS", "pnl": -1390.0, "portfolio_value": 137567.0, "roi_pct": 37.57, "note": "Gap through stop level"}, {"id": 118, "date": "2026-04-06", "day_of_week": "Mon", "month": "Apr 2026", "contract": "NG", "sector": "Energy", "direction": "LONG", "conviction": "HIGH", "entry": 2.8, "stop": 0.74, "target": 9.4, "rr": 3.2, "risk_amt": 2064.0, "outcome": "WIN", "pnl": 6605.0, "portfolio_value": 144172.0, "roi_pct": 44.17, "note": "Volume surge confirmed move"}, {"id": 119, "date": "2026-04-07", "day_of_week": "Tue", "month": "Apr 2026", "contract": "CL", "sector": "Energy", "direction": "SHORT", "conviction": "MEDIUM", "entry": 72.12, "stop": 86.54, "target": 33.19, "rr": 2.7, "risk_amt": 1442.0, "outcome": "WIN", "pnl": 3893.0, "portfolio_value": 148065.0, "roi_pct": 48.07, "note": "Support held perfectly"}, {"id": 120, "date": "2026-04-07", "day_of_week": "Tue", "month": "Apr 2026", "contract": "GC", "sector": "Metals", "direction": "LONG", "conviction": "MEDIUM", "entry": 2654.31, "stop": 2639.5, "target": 2700.22, "rr": 3.1, "risk_amt": 1481.0, "outcome": "LOSS", "pnl": -1481.0, "portfolio_value": 146584.0, "roi_pct": 46.58, "note": "Spread wider than expected"}, {"id": 121, "date": "2026-04-08", "day_of_week": "Wed", "month": "Apr 2026", "contract": "CL", "sector": "Energy", "direction": "SHORT", "conviction": "MEDIUM", "entry": 72.22, "stop": 86.88, "target": 20.91, "rr": 3.5, "risk_amt": 1466.0, "outcome": "LOSS", "pnl": -1466.0, "portfolio_value": 145118.0, "roi_pct": 45.12, "note": "Stop triggered on news spike"}, {"id": 122, "date": "2026-04-08", "day_of_week": "Wed", "month": "Apr 2026", "contract": "ES", "sector": "Equity", "direction": "SHORT", "conviction": "HIGH", "entry": 5810.99, "stop": 5854.53, "target": 5662.95, "rr": 3.4, "risk_amt": 2177.0, "outcome": "LOSS", "pnl": -2177.0, "portfolio_value": 142941.0, "roi_pct": 42.94, "note": "Spread wider than expected"}, {"id": 123, "date": "2026-04-09", "day_of_week": "Thu", "month": "Apr 2026", "contract": "ZB", "sector": "Bonds", "direction": "LONG", "conviction": "HIGH", "entry": 115.49, "stop": 94.05, "target": 171.23, "rr": 2.6, "risk_amt": 2144.0, "outcome": "LOSS", "pnl": -2144.0, "portfolio_value": 140797.0, "roi_pct": 40.8, "note": "Gap through stop level"}, {"id": 124, "date": "2026-04-10", "day_of_week": "Fri", "month": "Apr 2026", "contract": "NQ", "sector": "Equity", "direction": "SHORT", "conviction": "HIGH", "entry": 20591.62, "stop": 20697.22, "target": 20253.7, "rr": 3.2, "risk_amt": 2112.0, "outcome": "LOSS", "pnl": -2112.0, "portfolio_value": 138685.0, "roi_pct": 38.69, "note": "False breakout"}, {"id": 125, "date": "2026-04-10", "day_of_week": "Fri", "month": "Apr 2026", "contract": "ZB", "sector": "Bonds", "direction": "LONG", "conviction": "MEDIUM", "entry": 115.28, "stop": 101.41, "target": 162.44, "rr": 3.4, "risk_amt": 1387.0, "outcome": "WIN", "pnl": 4716.0, "portfolio_value": 143401.0, "roi_pct": 43.4, "note": "Volume surge confirmed move"}, {"id": 126, "date": "2026-04-13", "day_of_week": "Mon", "month": "Apr 2026", "contract": "ES", "sector": "Equity", "direction": "SHORT", "conviction": "HIGH", "entry": 5818.59, "stop": 5861.61, "target": 5685.23, "rr": 3.1, "risk_amt": 2151.0, "outcome": "LOSS", "pnl": -2151.0, "portfolio_value": 141250.0, "roi_pct": 41.25, "note": "Gap through stop level"}, {"id": 127, "date": "2026-04-13", "day_of_week": "Mon", "month": "Apr 2026", "contract": "GC", "sector": "Metals", "direction": "LONG", "conviction": "MEDIUM", "entry": 2654.39, "stop": 2640.27, "target": 2699.57, "rr": 3.2, "risk_amt": 1412.0, "outcome": "LOSS", "pnl": -1412.0, "portfolio_value": 139838.0, "roi_pct": 39.84, "note": "Gap through stop level"}, {"id": 128, "date": "2026-04-14", "day_of_week": "Tue", "month": "Apr 2026", "contract": "NQ", "sector": "Equity", "direction": "SHORT", "conviction": "HIGH", "entry": 20591.17, "stop": 20696.07, "target": 20224.02, "rr": 3.5, "risk_amt": 2098.0, "outcome": "LOSS", "pnl": -2098.0, "portfolio_value": 137740.0, "roi_pct": 37.74, "note": "Reversal at resistance"}, {"id": 129, "date": "2026-04-14", "day_of_week": "Tue", "month": "Apr 2026", "contract": "ES", "sector": "Equity", "direction": "SHORT", "conviction": "HIGH", "entry": 5811.82, "stop": 5853.14, "target": 5671.33, "rr": 3.4, "risk_amt": 2066.0, "outcome": "WIN", "pnl": 7024.0, "portfolio_value": 144764.0, "roi_pct": 44.76, "note": "Support held perfectly"}, {"id": 130, "date": "2026-04-14", "day_of_week": "Tue", "month": "Apr 2026", "contract": "YM", "sector": "Equity", "direction": "SHORT", "conviction": "MEDIUM", "entry": 42076.22, "stop": 42365.82, "target": 41294.3, "rr": 2.7, "risk_amt": 1448.0, "outcome": "LOSS", "pnl": -1448.0, "portfolio_value": 143316.0, "roi_pct": 43.32, "note": "Spread wider than expected"}, {"id": 131, "date": "2026-04-15", "day_of_week": "Wed", "month": "Apr 2026", "contract": "GC", "sector": "Metals", "direction": "LONG", "conviction": "MEDIUM", "entry": 2661.26, "stop": 2646.93, "target": 2709.98, "rr": 3.4, "risk_amt": 1433.0, "outcome": "WIN", "pnl": 4872.0, "portfolio_value": 148188.0, "roi_pct": 48.19, "note": "Support held perfectly"}, {"id": 132, "date": "2026-04-15", "day_of_week": "Wed", "month": "Apr 2026", "contract": "NQ", "sector": "Equity", "direction": "SHORT", "conviction": "HIGH", "entry": 20579.2, "stop": 20690.35, "target": 20234.64, "rr": 3.1, "risk_amt": 2223.0, "outcome": "WIN", "pnl": 6891.0, "portfolio_value": 155079.0, "roi_pct": 55.08, "note": "Support held perfectly"}, {"id": 133, "date": "2026-04-15", "day_of_week": "Wed", "month": "Apr 2026", "contract": "ES", "sector": "Equity", "direction": "SHORT", "conviction": "HIGH", "entry": 5817.48, "stop": 5864.0, "target": 5659.31, "rr": 3.4, "risk_amt": 2326.0, "outcome": "LOSS", "pnl": -2326.0, "portfolio_value": 152753.0, "roi_pct": 52.75, "note": "Gap through stop level"}, {"id": 134, "date": "2026-04-16", "day_of_week": "Thu", "month": "Apr 2026", "contract": "ZB", "sector": "Bonds", "direction": "LONG", "conviction": "MEDIUM", "entry": 115.1, "stop": 99.82, "target": 153.3, "rr": 2.5, "risk_amt": 1528.0, "outcome": "LOSS", "pnl": -1528.0, "portfolio_value": 151225.0, "roi_pct": 51.23, "note": "Gap through stop level"}, {"id": 135, "date": "2026-04-17", "day_of_week": "Fri", "month": "Apr 2026", "contract": "ZB", "sector": "Bonds", "direction": "LONG", "conviction": "MEDIUM", "entry": 115.48, "stop": 100.36, "target": 168.4, "rr": 3.5, "risk_amt": 1512.0, "outcome": "LOSS", "pnl": -1512.0, "portfolio_value": 149713.0, "roi_pct": 49.71, "note": "Gap through stop level"}, {"id": 136, "date": "2026-04-20", "day_of_week": "Mon", "month": "Apr 2026", "contract": "NQ", "sector": "Equity", "direction": "SHORT", "conviction": "HIGH", "entry": 20515.77, "stop": 20628.07, "target": 20279.94, "rr": 2.1, "risk_amt": 2246.0, "outcome": "LOSS", "pnl": -2246.0, "portfolio_value": 147467.0, "roi_pct": 47.47, "note": "Spread wider than expected"}, {"id": 137, "date": "2026-04-20", "day_of_week": "Mon", "month": "Apr 2026", "contract": "NG", "sector": "Energy", "direction": "LONG", "conviction": "HIGH", "entry": 2.8, "stop": 0.59, "target": 7.22, "rr": 2.0, "risk_amt": 2212.0, "outcome": "LOSS", "pnl": -2212.0, "portfolio_value": 145255.0, "roi_pct": 45.26, "note": "Spread wider than expected"}, {"id": 138, "date": "2026-04-21", "day_of_week": "Tue", "month": "Apr 2026", "contract": "YM", "sector": "Equity", "direction": "SHORT", "conviction": "MEDIUM", "entry": 42109.05, "stop": 42399.65, "target": 41121.01, "rr": 3.4, "risk_amt": 1453.0, "outcome": "WIN", "pnl": 4940.0, "portfolio_value": 150195.0, "roi_pct": 50.2, "note": "Trend continuation"}, {"id": 139, "date": "2026-04-21", "day_of_week": "Tue", "month": "Apr 2026", "contract": "ZB", "sector": "Bonds", "direction": "LONG", "conviction": "HIGH", "entry": 115.19, "stop": 92.66, "target": 176.02, "rr": 2.7, "risk_amt": 2253.0, "outcome": "LOSS", "pnl": -2253.0, "portfolio_value": 147942.0, "roi_pct": 47.94, "note": "Gap through stop level"}, {"id": 140, "date": "2026-04-22", "day_of_week": "Wed", "month": "Apr 2026", "contract": "ES", "sector": "Equity", "direction": "SHORT", "conviction": "HIGH", "entry": 5816.18, "stop": 5860.56, "target": 5718.54, "rr": 2.2, "risk_amt": 2219.0, "outcome": "LOSS", "pnl": -2219.0, "portfolio_value": 145723.0, "roi_pct": 45.72, "note": "Gap through stop level"}, {"id": 141, "date": "2026-04-22", "day_of_week": "Wed", "month": "Apr 2026", "contract": "ZB", "sector": "Bonds", "direction": "LONG", "conviction": "MEDIUM", "entry": 115.22, "stop": 100.65, "target": 145.82, "rr": 2.1, "risk_amt": 1457.0, "outcome": "LOSS", "pnl": -1457.0, "portfolio_value": 144266.0, "roi_pct": 44.27, "note": "Gap through stop level"}, {"id": 142, "date": "2026-04-22", "day_of_week": "Wed", "month": "Apr 2026", "contract": "NQ", "sector": "Equity", "direction": "SHORT", "conviction": "HIGH", "entry": 20556.58, "stop": 20664.78, "target": 20275.26, "rr": 2.6, "risk_amt": 2164.0, "outcome": "LOSS", "pnl": -2164.0, "portfolio_value": 142102.0, "roi_pct": 42.1, "note": "Spread wider than expected"}, {"id": 143, "date": "2026-04-23", "day_of_week": "Thu", "month": "Apr 2026", "contract": "NQ", "sector": "Equity", "direction": "SHORT", "conviction": "HIGH", "entry": 20534.47, "stop": 20641.07, "target": 20204.01, "rr": 3.1, "risk_amt": 2132.0, "outcome": "LOSS", "pnl": -2132.0, "portfolio_value": 139970.0, "roi_pct": 39.97, "note": "Reversal at resistance"}, {"id": 144, "date": "2026-04-23", "day_of_week": "Thu", "month": "Apr 2026", "contract": "YM", "sector": "Equity", "direction": "SHORT", "conviction": "MEDIUM", "entry": 42114.7, "stop": 42394.7, "target": 41190.7, "rr": 3.3, "risk_amt": 1400.0, "outcome": "LOSS", "pnl": -1400.0, "portfolio_value": 138570.0, "roi_pct": 38.57, "note": "Gap through stop level"}, {"id": 145, "date": "2026-04-24", "day_of_week": "Fri", "month": "Apr 2026", "contract": "ES", "sector": "Equity", "direction": "SHORT", "conviction": "HIGH", "entry": 5807.63, "stop": 5849.21, "target": 5674.57, "rr": 3.2, "risk_amt": 2079.0, "outcome": "WIN", "pnl": 6653.0, "portfolio_value": 145223.0, "roi_pct": 45.22, "note": "Support held perfectly"}, {"id": 146, "date": "2026-04-27", "day_of_week": "Mon", "month": "Apr 2026", "contract": "NQ", "sector": "Equity", "direction": "SHORT", "conviction": "HIGH", "entry": 20505.84, "stop": 20614.74, "target": 20200.92, "rr": 2.8, "risk_amt": 2178.0, "outcome": "LOSS", "pnl": -2178.0, "portfolio_value": 143045.0, "roi_pct": 43.05, "note": "Spread wider than expected"}, {"id": 147, "date": "2026-04-28", "day_of_week": "Tue", "month": "Apr 2026", "contract": "GC", "sector": "Metals", "direction": "LONG", "conviction": "MEDIUM", "entry": 2652.74, "stop": 2638.44, "target": 2692.78, "rr": 2.8, "risk_amt": 1430.0, "outcome": "WIN", "pnl": 4004.0, "portfolio_value": 147049.0, "roi_pct": 47.05, "note": "MACD confirmation on entry"}, {"id": 148, "date": "2026-04-29", "day_of_week": "Wed", "month": "Apr 2026", "contract": "GC", "sector": "Metals", "direction": "LONG", "conviction": "MEDIUM", "entry": 2651.48, "stop": 2636.78, "target": 2702.93, "rr": 3.5, "risk_amt": 1470.0, "outcome": "LOSS", "pnl": -1470.0, "portfolio_value": 145579.0, "roi_pct": 45.58, "note": "False breakout"}, {"id": 149, "date": "2026-04-29", "day_of_week": "Wed", "month": "Apr 2026", "contract": "CL", "sector": "Energy", "direction": "SHORT", "conviction": "MEDIUM", "entry": 72.0, "stop": 86.56, "target": 28.32, "rr": 3.0, "risk_amt": 1456.0, "outcome": "LOSS", "pnl": -1456.0, "portfolio_value": 144123.0, "roi_pct": 44.12, "note": "False breakout"}, {"id": 150, "date": "2026-04-29", "day_of_week": "Wed", "month": "Apr 2026", "contract": "NG", "sector": "Energy", "direction": "LONG", "conviction": "HIGH", "entry": 2.81, "stop": 0.65, "target": 8.0, "rr": 2.4, "risk_amt": 2162.0, "outcome": "LOSS", "pnl": -2162.0, "portfolio_value": 141961.0, "roi_pct": 41.96, "note": "False breakout"}, {"id": 151, "date": "2026-04-30", "day_of_week": "Thu", "month": "Apr 2026", "contract": "ES", "sector": "Equity", "direction": "SHORT", "conviction": "HIGH", "entry": 5809.58, "stop": 5852.16, "target": 5690.36, "rr": 2.8, "risk_amt": 2129.0, "outcome": "LOSS", "pnl": -2129.0, "portfolio_value": 139832.0, "roi_pct": 39.83, "note": "Spread wider than expected"}, {"id": 152, "date": "2026-04-30", "day_of_week": "Thu", "month": "Apr 2026", "contract": "YM", "sector": "Equity", "direction": "SHORT", "conviction": "MEDIUM", "entry": 41996.29, "stop": 42275.89, "target": 41325.25, "rr": 2.4, "risk_amt": 1398.0, "outcome": "LOSS", "pnl": -1398.0, "portfolio_value": 138434.0, "roi_pct": 38.43, "note": "Reversal at resistance"}, {"id": 153, "date": "2026-04-30", "day_of_week": "Thu", "month": "Apr 2026", "contract": "NQ", "sector": "Equity", "direction": "SHORT", "conviction": "HIGH", "entry": 20506.76, "stop": 20610.61, "target": 20184.82, "rr": 3.1, "risk_amt": 2077.0, "outcome": "WIN", "pnl": 6439.0, "portfolio_value": 144873.0, "roi_pct": 44.87, "note": "Support held perfectly"}, {"id": 154, "date": "2026-05-01", "day_of_week": "Fri", "month": "May 2026", "contract": "YM", "sector": "Equity", "direction": "LONG", "conviction": "HIGH", "entry": 42291.74, "stop": 41857.14, "target": 43334.78, "rr": 2.4, "risk_amt": 2173.0, "outcome": "LOSS", "pnl": -2173.0, "portfolio_value": 142700.0, "roi_pct": 42.7, "note": "Reversal at resistance"}, {"id": 155, "date": "2026-05-01", "day_of_week": "Fri", "month": "May 2026", "contract": "NQ", "sector": "Equity", "direction": "LONG", "conviction": "HIGH", "entry": 20601.25, "stop": 20494.25, "target": 20890.15, "rr": 2.7, "risk_amt": 2140.0, "outcome": "LOSS", "pnl": -2140.0, "portfolio_value": 140560.0, "roi_pct": 40.56, "note": "Gap through stop level"}, {"id": 156, "date": "2026-05-04", "day_of_week": "Mon", "month": "May 2026", "contract": "CL", "sector": "Energy", "direction": "SHORT", "conviction": "MEDIUM", "entry": 72.52, "stop": 86.58, "target": 30.34, "rr": 3.0, "risk_amt": 1406.0, "outcome": "LOSS", "pnl": -1406.0, "portfolio_value": 139154.0, "roi_pct": 39.15, "note": "Stop triggered on news spike"}, {"id": 157, "date": "2026-05-04", "day_of_week": "Mon", "month": "May 2026", "contract": "ZB", "sector": "Bonds", "direction": "SHORT", "conviction": "HIGH", "entry": 115.78, "stop": 136.65, "target": 57.34, "rr": 2.8, "risk_amt": 2087.0, "outcome": "BE", "pnl": -6.0, "portfolio_value": 139148.0, "roi_pct": 39.15, "note": "Exited early on reversal signal"}, {"id": 158, "date": "2026-05-05", "day_of_week": "Tue", "month": "May 2026", "contract": "CL", "sector": "Energy", "direction": "SHORT", "conviction": "MEDIUM", "entry": 72.58, "stop": 86.49, "target": 39.2, "rr": 2.4, "risk_amt": 1391.0, "outcome": "LOSS", "pnl": -1391.0, "portfolio_value": 137757.0, "roi_pct": 37.76, "note": "Stop triggered on news spike"}, {"id": 159, "date": "2026-05-06", "day_of_week": "Wed", "month": "May 2026", "contract": "ES", "sector": "Equity", "direction": "LONG", "conviction": "HIGH", "entry": 5841.05, "stop": 5799.73, "target": 5936.09, "rr": 2.3, "risk_amt": 2066.0, "outcome": "LOSS", "pnl": -2066.0, "portfolio_value": 135691.0, "roi_pct": 35.69, "note": "Spread wider than expected"}, {"id": 160, "date": "2026-05-06", "day_of_week": "Wed", "month": "May 2026", "contract": "NQ", "sector": "Equity", "direction": "LONG", "conviction": "HIGH", "entry": 20674.51, "stop": 20572.76, "target": 20888.18, "rr": 2.1, "risk_amt": 2035.0, "outcome": "WIN", "pnl": 4274.0, "portfolio_value": 139965.0, "roi_pct": 39.97, "note": "Volume surge confirmed move"}, {"id": 161, "date": "2026-05-07", "day_of_week": "Thu", "month": "May 2026", "contract": "ZB", "sector": "Bonds", "direction": "SHORT", "conviction": "MEDIUM", "entry": 116.02, "stop": 130.02, "target": 72.62, "rr": 3.1, "risk_amt": 1400.0, "outcome": "WIN", "pnl": 4340.0, "portfolio_value": 144305.0, "roi_pct": 44.3, "note": "Clean breakout entry"}, {"id": 162, "date": "2026-05-07", "day_of_week": "Thu", "month": "May 2026", "contract": "NG", "sector": "Energy", "direction": "LONG", "conviction": "MEDIUM", "entry": 2.81, "stop": 1.37, "target": 7.28, "rr": 3.1, "risk_amt": 1443.0, "outcome": "WIN", "pnl": 4473.0, "portfolio_value": 148778.0, "roi_pct": 48.78, "note": "Trend continuation"}, {"id": 163, "date": "2026-05-08", "day_of_week": "Fri", "month": "May 2026", "contract": "ES", "sector": "Equity", "direction": "LONG", "conviction": "HIGH", "entry": 5832.48, "stop": 5787.84, "target": 5975.33, "rr": 3.2, "risk_amt": 2232.0, "outcome": "LOSS", "pnl": -2232.0, "portfolio_value": 146546.0, "roi_pct": 46.55, "note": "False breakout"}, {"id": 164, "date": "2026-05-08", "day_of_week": "Fri", "month": "May 2026", "contract": "CL", "sector": "Energy", "direction": "SHORT", "conviction": "MEDIUM", "entry": 72.39, "stop": 87.04, "target": 34.3, "rr": 2.6, "risk_amt": 1465.0, "outcome": "WIN", "pnl": 3809.0, "portfolio_value": 150355.0, "roi_pct": 50.36, "note": "Support held perfectly"}, {"id": 165, "date": "2026-05-08", "day_of_week": "Fri", "month": "May 2026", "contract": "NG", "sector": "Energy", "direction": "LONG", "conviction": "MEDIUM", "entry": 2.82, "stop": 1.32, "target": 6.58, "rr": 2.5, "risk_amt": 1504.0, "outcome": "WIN", "pnl": 3760.0, "portfolio_value": 154115.0, "roi_pct": 54.12, "note": "Trend continuation"}, {"id": 166, "date": "2026-05-11", "day_of_week": "Mon", "month": "May 2026", "contract": "NG", "sector": "Energy", "direction": "LONG", "conviction": "MEDIUM", "entry": 2.82, "stop": 1.28, "target": 7.13, "rr": 2.8, "risk_amt": 1541.0, "outcome": "LOSS", "pnl": -1541.0, "portfolio_value": 152574.0, "roi_pct": 52.57, "note": "Spread wider than expected"}, {"id": 167, "date": "2026-05-11", "day_of_week": "Mon", "month": "May 2026", "contract": "ES", "sector": "Equity", "direction": "LONG", "conviction": "HIGH", "entry": 5840.48, "stop": 5794.7, "target": 5964.09, "rr": 2.7, "risk_amt": 2289.0, "outcome": "WIN", "pnl": 6180.0, "portfolio_value": 158754.0, "roi_pct": 58.75, "note": "MACD confirmation on entry"}, {"id": 168, "date": "2026-05-12", "day_of_week": "Tue", "month": "May 2026", "contract": "YM", "sector": "Equity", "direction": "LONG", "conviction": "HIGH", "entry": 42387.43, "stop": 41911.23, "target": 43577.93, "rr": 2.5, "risk_amt": 2381.0, "outcome": "LOSS", "pnl": -2381.0, "portfolio_value": 156373.0, "roi_pct": 56.37, "note": "False breakout"}, {"id": 169, "date": "2026-05-12", "day_of_week": "Tue", "month": "May 2026", "contract": "NQ", "sector": "Equity", "direction": "LONG", "conviction": "HIGH", "entry": 20648.49, "stop": 20531.19, "target": 20941.74, "rr": 2.5, "risk_amt": 2346.0, "outcome": "LOSS", "pnl": -2346.0, "portfolio_value": 154027.0, "roi_pct": 54.03, "note": "False breakout"}, {"id": 170, "date": "2026-05-13", "day_of_week": "Wed", "month": "May 2026", "contract": "CL", "sector": "Energy", "direction": "SHORT", "conviction": "MEDIUM", "entry": 72.62, "stop": 88.02, "target": 23.34, "rr": 3.2, "risk_amt": 1540.0, "outcome": "BE", "pnl": 20.0, "portfolio_value": 154047.0, "roi_pct": 54.05, "note": "Managed to scratch"}, {"id": 171, "date": "2026-05-13", "day_of_week": "Wed", "month": "May 2026", "contract": "NG", "sector": "Energy", "direction": "LONG", "conviction": "MEDIUM", "entry": 2.82, "stop": 1.28, "target": 6.21, "rr": 2.2, "risk_amt": 1540.0, "outcome": "WIN", "pnl": 3388.0, "portfolio_value": 157435.0, "roi_pct": 57.44, "note": "Trend continuation"}, {"id": 172, "date": "2026-05-13", "day_of_week": "Wed", "month": "May 2026", "contract": "ZB", "sector": "Bonds", "direction": "SHORT", "conviction": "MEDIUM", "entry": 115.83, "stop": 131.57, "target": 74.91, "rr": 2.6, "risk_amt": 1574.0, "outcome": "WIN", "pnl": 4092.0, "portfolio_value": 161527.0, "roi_pct": 61.53, "note": "Volume surge confirmed move"}, {"id": 173, "date": "2026-05-14", "day_of_week": "Thu", "month": "May 2026", "contract": "YM", "sector": "Equity", "direction": "LONG", "conviction": "HIGH", "entry": 42393.42, "stop": 41908.82, "target": 43750.3, "rr": 2.8, "risk_amt": 2423.0, "outcome": "LOSS", "pnl": -2423.0, "portfolio_value": 159104.0, "roi_pct": 59.1, "note": "Spread wider than expected"}, {"id": 174, "date": "2026-05-14", "day_of_week": "Thu", "month": "May 2026", "contract": "NQ", "sector": "Equity", "direction": "LONG", "conviction": "HIGH", "entry": 20654.63, "stop": 20535.28, "target": 21060.42, "rr": 3.4, "risk_amt": 2387.0, "outcome": "BE", "pnl": -98.0, "portfolio_value": 159006.0, "roi_pct": 59.01, "note": "Managed to scratch"}, {"id": 175, "date": "2026-05-15", "day_of_week": "Fri", "month": "May 2026", "contract": "NG", "sector": "Energy", "direction": "LONG", "conviction": "HIGH", "entry": 2.82, "stop": 0.44, "target": 10.45, "rr": 3.2, "risk_amt": 2385.0, "outcome": "LOSS", "pnl": -2385.0, "portfolio_value": 156621.0, "roi_pct": 56.62, "note": "False breakout"}, {"id": 176, "date": "2026-05-15", "day_of_week": "Fri", "month": "May 2026", "contract": "YM", "sector": "Equity", "direction": "LONG", "conviction": "HIGH", "entry": 42251.02, "stop": 41781.22, "target": 43566.46, "rr": 2.8, "risk_amt": 2349.0, "outcome": "WIN", "pnl": 6577.0, "portfolio_value": 163198.0, "roi_pct": 63.2, "note": "MACD confirmation on entry"}, {"id": 177, "date": "2026-05-18", "day_of_week": "Mon", "month": "May 2026", "contract": "CL", "sector": "Energy", "direction": "SHORT", "conviction": "MEDIUM", "entry": 72.43, "stop": 88.75, "target": 34.89, "rr": 2.3, "risk_amt": 1632.0, "outcome": "LOSS", "pnl": -1632.0, "portfolio_value": 161566.0, "roi_pct": 61.57, "note": "Gap through stop level"}, {"id": 178, "date": "2026-05-18", "day_of_week": "Mon", "month": "May 2026", "contract": "YM", "sector": "Equity", "direction": "LONG", "conviction": "HIGH", "entry": 42246.23, "stop": 41761.63, "target": 43845.41, "rr": 3.3, "risk_amt": 2423.0, "outcome": "LOSS", "pnl": -2423.0, "portfolio_value": 159143.0, "roi_pct": 59.14, "note": "False breakout"}, {"id": 179, "date": "2026-05-19", "day_of_week": "Tue", "month": "May 2026", "contract": "ES", "sector": "Equity", "direction": "LONG", "conviction": "HIGH", "entry": 5853.28, "stop": 5805.54, "target": 5972.63, "rr": 2.5, "risk_amt": 2387.0, "outcome": "LOSS", "pnl": -2387.0, "portfolio_value": 156756.0, "roi_pct": 56.76, "note": "Spread wider than expected"}, {"id": 180, "date": "2026-05-20", "day_of_week": "Wed", "month": "May 2026", "contract": "NQ", "sector": "Equity", "direction": "LONG", "conviction": "HIGH", "entry": 20699.67, "stop": 20582.12, "target": 21017.05, "rr": 2.7, "risk_amt": 2351.0, "outcome": "LOSS", "pnl": -2351.0, "portfolio_value": 154405.0, "roi_pct": 54.41, "note": "False breakout"}, {"id": 181, "date": "2026-05-20", "day_of_week": "Wed", "month": "May 2026", "contract": "YM", "sector": "Equity", "direction": "LONG", "conviction": "HIGH", "entry": 42305.57, "stop": 41842.37, "target": 43602.53, "rr": 2.8, "risk_amt": 2316.0, "outcome": "LOSS", "pnl": -2316.0, "portfolio_value": 152089.0, "roi_pct": 52.09, "note": "Reversal at resistance"}, {"id": 182, "date": "2026-05-20", "day_of_week": "Wed", "month": "May 2026", "contract": "ES", "sector": "Equity", "direction": "LONG", "conviction": "HIGH", "entry": 5846.14, "stop": 5800.52, "target": 5978.44, "rr": 2.9, "risk_amt": 2281.0, "outcome": "LOSS", "pnl": -2281.0, "portfolio_value": 149808.0, "roi_pct": 49.81, "note": "False breakout"}, {"id": 183, "date": "2026-05-21", "day_of_week": "Thu", "month": "May 2026", "contract": "NQ", "sector": "Equity", "direction": "LONG", "conviction": "HIGH", "entry": 20687.93, "stop": 20575.58, "target": 20946.33, "rr": 2.3, "risk_amt": 2247.0, "outcome": "LOSS", "pnl": -2247.0, "portfolio_value": 147561.0, "roi_pct": 47.56, "note": "Gap through stop level"}, {"id": 184, "date": "2026-05-21", "day_of_week": "Thu", "month": "May 2026", "contract": "ZB", "sector": "Bonds", "direction": "SHORT", "conviction": "MEDIUM", "entry": 116.06, "stop": 130.82, "target": 83.59, "rr": 2.2, "risk_amt": 1476.0, "outcome": "WIN", "pnl": 3247.0, "portfolio_value": 150808.0, "roi_pct": 50.81, "note": "Support held perfectly"}, {"id": 185, "date": "2026-05-21", "day_of_week": "Thu", "month": "May 2026", "contract": "YM", "sector": "Equity", "direction": "LONG", "conviction": "HIGH", "entry": 42330.49, "stop": 41878.09, "target": 43597.21, "rr": 2.8, "risk_amt": 2262.0, "outcome": "LOSS", "pnl": -2262.0, "portfolio_value": 148546.0, "roi_pct": 48.55, "note": "False breakout"}, {"id": 186, "date": "2026-05-22", "day_of_week": "Fri", "month": "May 2026", "contract": "NQ", "sector": "Equity", "direction": "LONG", "conviction": "HIGH", "entry": 20673.63, "stop": 20562.23, "target": 21030.11, "rr": 3.2, "risk_amt": 2228.0, "outcome": "LOSS", "pnl": -2228.0, "portfolio_value": 146318.0, "roi_pct": 46.32, "note": "Gap through stop level"}, {"id": 187, "date": "2026-05-22", "day_of_week": "Fri", "month": "May 2026", "contract": "CL", "sector": "Energy", "direction": "SHORT", "conviction": "MEDIUM", "entry": 72.73, "stop": 87.36, "target": 30.3, "rr": 2.9, "risk_amt": 1463.0, "outcome": "WIN", "pnl": 4243.0, "portfolio_value": 150561.0, "roi_pct": 50.56, "note": "Support held perfectly"}, {"id": 188, "date": "2026-05-22", "day_of_week": "Fri", "month": "May 2026", "contract": "YM", "sector": "Equity", "direction": "LONG", "conviction": "HIGH", "entry": 42404.11, "stop": 41952.51, "target": 43487.95, "rr": 2.4, "risk_amt": 2258.0, "outcome": "WIN", "pnl": 5419.0, "portfolio_value": 155980.0, "roi_pct": 55.98, "note": "Clean breakout entry"}, {"id": 189, "date": "2026-05-26", "day_of_week": "Tue", "month": "May 2026", "contract": "NQ", "sector": "Equity", "direction": "LONG", "conviction": "HIGH", "entry": 20699.11, "stop": 20582.11, "target": 21003.31, "rr": 2.6, "risk_amt": 2340.0, "outcome": "WIN", "pnl": 6084.0, "portfolio_value": 162064.0, "roi_pct": 62.06, "note": "Clean breakout entry"}, {"id": 190, "date": "2026-05-27", "day_of_week": "Wed", "month": "May 2026", "contract": "ES", "sector": "Equity", "direction": "LONG", "conviction": "HIGH", "entry": 5844.98, "stop": 5796.36, "target": 5976.25, "rr": 2.7, "risk_amt": 2431.0, "outcome": "WIN", "pnl": 6564.0, "portfolio_value": 168628.0, "roi_pct": 68.63, "note": "Volume surge confirmed move"}, {"id": 191, "date": "2026-05-27", "day_of_week": "Wed", "month": "May 2026", "contract": "YM", "sector": "Equity", "direction": "LONG", "conviction": "HIGH", "entry": 42335.82, "stop": 41835.82, "target": 43785.82, "rr": 2.9, "risk_amt": 2500, "outcome": "LOSS", "pnl": -2500, "portfolio_value": 166128.0, "roi_pct": 66.13, "note": "Stop triggered on news spike"}, {"id": 192, "date": "2026-05-28", "day_of_week": "Thu", "month": "May 2026", "contract": "CL", "sector": "Energy", "direction": "SHORT", "conviction": "MEDIUM", "entry": 72.69, "stop": 89.3, "target": 22.86, "rr": 3.0, "risk_amt": 1661.0, "outcome": "BE", "pnl": -25.0, "portfolio_value": 166103.0, "roi_pct": 66.1, "note": "Moved stop to break-even"}, {"id": 193, "date": "2026-05-29", "day_of_week": "Fri", "month": "May 2026", "contract": "ES", "sector": "Equity", "direction": "LONG", "conviction": "HIGH", "entry": 5841.47, "stop": 5791.63, "target": 5976.04, "rr": 2.7, "risk_amt": 2492.0, "outcome": "WIN", "pnl": 6728.0, "portfolio_value": 172831.0, "roi_pct": 72.83, "note": "Clean breakout entry"}, {"id": 194, "date": "2026-05-29", "day_of_week": "Fri", "month": "May 2026", "contract": "NQ", "sector": "Equity", "direction": "LONG", "conviction": "HIGH", "entry": 20663.8, "stop": 20538.8, "target": 20938.8, "rr": 2.2, "risk_amt": 2500, "outcome": "WIN", "pnl": 5500.0, "portfolio_value": 178331.0, "roi_pct": 78.33, "note": "MACD confirmation on entry"}];
+
+// ── Page navigation ─────────────────────────────────────────────────
+function showPage(name) {
+  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.nav-tab').forEach(t => t.classList.remove('active'));
+  document.getElementById('page-' + name).classList.add('active');
+  event.target.classList.add('active');
+  if (name === 'tradelog') renderLog(TRADES);
+}
+
+// ── Chart defaults ──────────────────────────────────────────────────
+Chart.defaults.color = '#64748b';
+Chart.defaults.borderColor = '#1e2d45';
+const FONT = { family: 'Segoe UI, system-ui, sans-serif', size: 11 };
+
+const dateLabels = ["01-02", "01-05", "01-06", "01-07", "01-08", "01-09", "01-12", "01-13", "01-14", "01-15", "01-16", "01-20", "01-21", "01-22", "01-23", "01-26", "01-27", "01-28", "01-29", "01-30", "02-02", "02-03", "02-04", "02-05", "02-06", "02-09", "02-10", "02-11", "02-12", "02-13", "02-17", "02-18", "02-19", "02-20", "02-23", "02-24", "02-25", "02-26", "02-27", "03-02", "03-03", "03-04", "03-05", "03-06", "03-09", "03-10", "03-11", "03-12", "03-13", "03-16", "03-17", "03-18", "03-19", "03-20", "03-23", "03-24", "03-25", "03-26", "03-27", "03-30", "03-31", "04-01", "04-02", "04-06", "04-07", "04-08", "04-09", "04-10", "04-13", "04-14", "04-15", "04-16", "04-17", "04-20", "04-21", "04-22", "04-23", "04-24", "04-27", "04-28", "04-29", "04-30", "05-01", "05-04", "05-05", "05-06", "05-07", "05-08", "05-11", "05-12", "05-13", "05-14", "05-15", "05-18", "05-19", "05-20", "05-21", "05-22", "05-26", "05-27", "05-28", "05-29"];
+const portfVals  = [97515.0, 95950.0, 98254.0, 101497.0, 100482.0, 97985.0, 99410.0, 102031.0, 101011.0, 100001.0, 102119.0, 99582.0, 100345.0, 100395.0, 98889.0, 100641.0, 98140.0, 97503.0, 96040.0, 103975.0, 106340.0, 106320.0, 102641.0, 103414.0, 102380.0, 100342.0, 101208.0, 102200.0, 103404.0, 107132.0, 106061.0, 103425.0, 104541.0, 101428.0, 107812.0, 106734.0, 113562.0, 114433.0, 118386.0, 114290.0, 118176.0, 115239.0, 112946.0, 111853.0, 114762.0, 123058.0, 124761.0, 123513.0, 122278.0, 119240.0, 118048.0, 116868.0, 115699.0, 124647.0, 135727.0, 133026.0, 137818.0, 141263.0, 138452.0, 141454.0, 138639.0, 136559.0, 133166.0, 144172.0, 146584.0, 142941.0, 140797.0, 143401.0, 139838.0, 143316.0, 152753.0, 151225.0, 149713.0, 145255.0, 147942.0, 142102.0, 138570.0, 145223.0, 143045.0, 147049.0, 141961.0, 144873.0, 140560.0, 139148.0, 137757.0, 139965.0, 148778.0, 154115.0, 158754.0, 154027.0, 161527.0, 159006.0, 163198.0, 159143.0, 156756.0, 149808.0, 148546.0, 155980.0, 162064.0, 166128.0, 166103.0, 178331.0];
+const ddVals     = [-2.48, -4.05, -1.75, 0.0, -1.0, -3.46, -2.06, 0.0, -1.0, -1.99, 0.0, -2.48, -1.74, -1.69, -3.16, -1.45, -3.9, -4.52, -5.95, 0.0, 0.0, -0.02, -3.48, -2.75, -3.72, -5.64, -4.83, -3.89, -2.76, 0.0, -1.0, -3.46, -2.42, -5.32, 0.0, -1.0, 0.0, 0.0, 0.0, -3.46, -0.18, -2.66, -4.6, -5.52, -3.06, 0.0, 0.0, -1.0, -1.99, -4.43, -5.38, -6.33, -7.26, -0.09, 0.0, -1.99, 0.0, 0.0, -1.99, 0.0, -1.99, -3.46, -5.86, 0.0, 0.0, -2.49, -3.95, -2.17, -4.6, -2.23, 0.0, -1.0, -1.99, -4.91, -3.15, -6.97, -9.28, -4.93, -6.36, -3.73, -7.07, -5.16, -7.98, -8.91, -9.82, -8.37, -2.6, 0.0, 0.0, -2.98, 0.0, -1.56, 0.0, -2.48, -3.95, -8.2, -8.98, -4.42, -0.69, 0.0, -0.02, 0.0];
+const mLabels    = ["Jan", "Feb", "Mar", "Apr", "May"];
+const mRoi       = [3.98, 13.86, 17.11, 4.5, 23.09];
+const mPnl       = [3975.0, 14411.0, 20253.0, 6234.0, 33458.0];
+const mWr        = [30.6, 35.1, 30.8, 26.8, 39.0];
+const mTrades    = [36, 37, 39, 41, 41];
+const cumRoi     = [3.98, 18.39, 38.64, 44.87, 78.33];
+
+// contract data
+const cLabels = ["ES", "NG", "CL", "ZB", "GC", "ZN", "NQ", "SI", "YM"];
+const cWr     = [37.5, 52.9, 36.4, 30.8, 30.4, 100.0, 25.0, 12.5, 17.6];
+const cPnl    = [26684.0, 23021.0, 17523.0, 10790.0, 5402.0, 5045.0, 4464.0, -5410.0, -9188.0];
+
+// ── Equity Curve ────────────────────────────────────────────────────
+new Chart(document.getElementById('equityChart'), {
+  type: 'line',
+  data: {
+    labels: dateLabels,
+    datasets: [{
+      label: 'Portfolio Value',
+      data: portfVals,
+      borderColor: '#10b981',
+      backgroundColor: 'rgba(16,185,129,.08)',
+      borderWidth: 2,
+      fill: true,
+      tension: 0.3,
+      pointRadius: 0,
+      pointHoverRadius: 4,
+    },{
+      label: 'Target ($120K)',
+      data: portfVals.map((_,i) => 100000 + (20000 * i / portfVals.length)),
+      borderColor: '#f59e0b',
+      borderWidth: 1.5,
+      borderDash: [6,4],
+      pointRadius: 0,
+      fill: false,
+      tension: 0,
+    }]
+  },
+  options: {
+    responsive: true, maintainAspectRatio: false,
+    plugins: { legend: { labels: { font: FONT, boxWidth: 12 } }, tooltip: {
+      callbacks: { label: ctx => ' $' + ctx.raw.toLocaleString() }
+    } },
+    scales: {
+      x: { ticks: { maxTicksLimit: 8, font: FONT }, grid: { color: '#1e2d45' } },
+      y: { ticks: { font: FONT, callback: v => '$' + (v/1000).toFixed(0) + 'K' }, grid: { color: '#1e2d45' } }
+    }
+  }
+});
+
+// ── Drawdown ────────────────────────────────────────────────────────
+new Chart(document.getElementById('ddChart'), {
+  type: 'line',
+  data: {
+    labels: dateLabels,
+    datasets: [{
+      label: 'Drawdown %',
+      data: ddVals,
+      borderColor: '#ef4444',
+      backgroundColor: 'rgba(239,68,68,.1)',
+      borderWidth: 1.5,
+      fill: true,
+      tension: 0.3,
+      pointRadius: 0,
+    },{
+      label: '-10% Warning',
+      data: ddVals.map(() => -10),
+      borderColor: '#f59e0b',
+      borderWidth: 1,
+      borderDash: [4,4],
+      pointRadius: 0,
+      fill: false,
+    }]
+  },
+  options: {
+    responsive: true, maintainAspectRatio: false,
+    plugins: { legend: { labels: { font: FONT, boxWidth: 12 } } },
+    scales: {
+      x: { ticks: { maxTicksLimit: 8, font: FONT }, grid: { color: '#1e2d45' } },
+      y: { ticks: { font: FONT, callback: v => v + '%' }, grid: { color: '#1e2d45' } }
+    }
+  }
+});
+
+// ── Cumulative ROI ─────────────────────────────────────────────────
+new Chart(document.getElementById('cumRoiChart'), {
+  type: 'line',
+  data: {
+    labels: mLabels,
+    datasets: [{
+      label: 'Cumulative ROI %',
+      data: cumRoi,
+      borderColor: '#3b82f6',
+      backgroundColor: 'rgba(59,130,246,.1)',
+      borderWidth: 2.5,
+      fill: true,
+      tension: 0.4,
+      pointRadius: 5,
+      pointBackgroundColor: cumRoi.map(v => v >= 20 ? '#10b981' : '#f59e0b'),
+    },{
+      label: '20% Target',
+      data: mLabels.map(() => 20),
+      borderColor: '#10b981',
+      borderWidth: 1.5,
+      borderDash: [5,4],
+      pointRadius: 0,
+      fill: false,
+    }]
+  },
+  options: {
+    responsive: true, maintainAspectRatio: false,
+    plugins: { legend: { labels: { font: FONT, boxWidth: 12 } } },
+    scales: {
+      x: { ticks: { font: FONT }, grid: { color: '#1e2d45' } },
+      y: { ticks: { font: FONT, callback: v => v + '%' }, grid: { color: '#1e2d45' } }
+    }
+  }
+});
+
+// ── Monthly P&L bar ────────────────────────────────────────────────
+new Chart(document.getElementById('monthlyPnlChart'), {
+  type: 'bar',
+  data: {
+    labels: mLabels,
+    datasets: [{
+      label: 'Monthly P&L ($)',
+      data: mPnl,
+      backgroundColor: mPnl.map(v => v >= 0 ? 'rgba(16,185,129,.7)' : 'rgba(239,68,68,.7)'),
+      borderColor:      mPnl.map(v => v >= 0 ? '#10b981' : '#ef4444'),
+      borderWidth: 1,
+      borderRadius: 4,
+    }]
+  },
+  options: {
+    responsive: true, maintainAspectRatio: false,
+    plugins: { legend: { display: false }, tooltip: {
+      callbacks: { label: ctx => ' $' + ctx.raw.toLocaleString() }
+    } },
+    scales: {
+      x: { ticks: { font: FONT }, grid: { display: false } },
+      y: { ticks: { font: FONT, callback: v => '$' + (v/1000).toFixed(0) + 'K' }, grid: { color: '#1e2d45' } }
+    }
+  }
+});
+
+// ── Contract PnL horizontal bar ────────────────────────────────────
+new Chart(document.getElementById('contractPnlChart'), {
+  type: 'bar',
+  data: {
+    labels: cLabels,
+    datasets: [{
+      label: 'YTD P&L ($)',
+      data: cPnl,
+      backgroundColor: cPnl.map(v => v >= 0 ? 'rgba(16,185,129,.75)' : 'rgba(239,68,68,.75)'),
+      borderColor:      cPnl.map(v => v >= 0 ? '#10b981' : '#ef4444'),
+      borderWidth: 1,
+      borderRadius: 4,
+    }]
+  },
+  options: {
+    responsive: true, maintainAspectRatio: false,
+    plugins: { legend: { display: false }, tooltip: {
+      callbacks: { label: ctx => ' $' + ctx.raw.toLocaleString() }
+    } },
+    scales: {
+      x: { ticks: { font: FONT }, grid: { display: false } },
+      y: { ticks: { font: FONT, callback: v => '$' + (v/1000).toFixed(0) + 'K' }, grid: { color: '#1e2d45' } }
+    }
+  }
+});
+
+// ── Monthly ROI chart (page 2) ─────────────────────────────────────
+new Chart(document.getElementById('monthlyRoiChart2'), {
+  type: 'bar',
+  data: {
+    labels: mLabels,
+    datasets: [{
+      label: 'Monthly ROI %',
+      data: mRoi,
+      backgroundColor: mRoi.map(v => v >= 4 ? 'rgba(16,185,129,.7)' : v >= 0 ? 'rgba(245,158,11,.7)' : 'rgba(239,68,68,.7)'),
+      borderColor:      mRoi.map(v => v >= 4 ? '#10b981' : v >= 0 ? '#f59e0b' : '#ef4444'),
+      borderWidth: 1, borderRadius: 4,
+    },{
+      label: '4% Monthly Target',
+      data: mLabels.map(() => 4),
+      type: 'line',
+      borderColor: '#3b82f6',
+      borderWidth: 2,
+      borderDash: [5,4],
+      pointRadius: 0,
+      fill: false,
+    }]
+  },
+  options: {
+    responsive: true, maintainAspectRatio: false,
+    plugins: { legend: { labels: { font: FONT, boxWidth: 12 } } },
+    scales: {
+      x: { ticks: { font: FONT }, grid: { display: false } },
+      y: { ticks: { font: FONT, callback: v => v + '%' }, grid: { color: '#1e2d45' } }
+    }
+  }
+});
+
+// ── Monthly win rate (page 2) ──────────────────────────────────────
+new Chart(document.getElementById('monthlyWrChart'), {
+  type: 'bar',
+  data: {
+    labels: mLabels,
+    datasets: [{
+      label: 'Win Rate %',
+      data: mWr,
+      backgroundColor: 'rgba(59,130,246,.6)',
+      borderColor: '#3b82f6',
+      borderWidth: 1,
+      borderRadius: 4,
+      yAxisID: 'y',
+    },{
+      label: 'Trade Count',
+      data: mTrades,
+      type: 'line',
+      borderColor: '#f59e0b',
+      borderWidth: 2,
+      pointRadius: 4,
+      pointBackgroundColor: '#f59e0b',
+      fill: false,
+      yAxisID: 'y2',
+    }]
+  },
+  options: {
+    responsive: true, maintainAspectRatio: false,
+    plugins: { legend: { labels: { font: FONT, boxWidth: 12 } } },
+    scales: {
+      x: { ticks: { font: FONT }, grid: { display: false } },
+      y:  { position: 'left',  ticks: { font: FONT, callback: v => v + '%' }, grid: { color: '#1e2d45' } },
+      y2: { position: 'right', ticks: { font: FONT }, grid: { display: false } }
+    }
+  }
+});
+
+// ── Contract WR chart (page 3) ─────────────────────────────────────
+new Chart(document.getElementById('wrContractChart'), {
+  type: 'bar',
+  data: {
+    labels: cLabels,
+    datasets: [{
+      label: 'Win Rate %',
+      data: cWr,
+      backgroundColor: cWr.map(v => v >= 40 ? 'rgba(16,185,129,.7)' : v >= 25 ? 'rgba(245,158,11,.7)' : 'rgba(239,68,68,.7)'),
+      borderColor: cWr.map(v => v >= 40 ? '#10b981' : v >= 25 ? '#f59e0b' : '#ef4444'),
+      borderWidth: 1, borderRadius: 4,
+    },{
+      label: '40% Target',
+      data: cLabels.map(() => 40),
+      type: 'line',
+      borderColor: '#3b82f6',
+      borderWidth: 1.5,
+      borderDash: [5,4],
+      pointRadius: 0,
+      fill: false,
+    }]
+  },
+  options: {
+    responsive: true, maintainAspectRatio: false,
+    plugins: { legend: { labels: { font: FONT, boxWidth: 12 } } },
+    scales: {
+      x: { ticks: { font: FONT }, grid: { display: false } },
+      y: { ticks: { font: FONT, callback: v => v + '%' }, grid: { color: '#1e2d45' } }
+    }
+  }
+});
+
+// ── Contract PnL pie (page 3) ──────────────────────────────────────
+new Chart(document.getElementById('pnlContractChart2'), {
+  type: 'doughnut',
+  data: {
+    labels: cLabels,
+    datasets: [{
+      data: cPnl.map(v => Math.abs(v)),
+      backgroundColor: ['#10b981','#3b82f6','#f59e0b','#a78bfa','#f87171','#34d399','#60a5fa','#fbbf24','#c084fc','#fb7185'],
+      borderColor: '#1a2235',
+      borderWidth: 2,
+    }]
+  },
+  options: {
+    responsive: true, maintainAspectRatio: false,
+    plugins: {
+      legend: { position: 'right', labels: { font: FONT, boxWidth: 12, padding: 10 } },
+      tooltip: { callbacks: { label: ctx => ctx.label + ': $' + ctx.raw.toLocaleString() } }
+    }
+  }
+});
+
+// ══════════════════════════════════════════════════════════════════
+// TRADE LOG
+// ══════════════════════════════════════════════════════════════════
+let sortKey = 'id', sortDir = 1;
+let currentTrades = [...TRADES];
+
+function renderLog(data) {
+  const body = document.getElementById('logBody');
+  document.getElementById('log-count').textContent = 'Showing ' + data.length + ' of ' + TRADES.length + ' trades';
+  body.innerHTML = data.map(t => {
+    const pnlColor = t.pnl > 0 ? '#10b981' : t.pnl < 0 ? '#ef4444' : '#f59e0b';
+    const roiColor = t.roi_pct >= 20 ? '#10b981' : t.roi_pct >= 10 ? '#3b82f6' : '#f59e0b';
+    return `<tr>
+      <td style="color:var(--muted)">${t.id}</td>
+      <td>${t.date} <span style="color:var(--muted);font-size:10px">${t.day_of_week}</span></td>
+      <td><strong>${t.contract}</strong></td>
+      <td><span class="pill pill-${t.direction.toLowerCase()}">${t.direction}</span></td>
+      <td><span class="pill pill-${t.conviction.toLowerCase()}">${t.conviction}</span></td>
+      <td>${t.entry.toLocaleString()}</td>
+      <td style="color:#ef4444">${t.stop.toLocaleString()}</td>
+      <td style="color:#10b981">${t.target.toLocaleString()}</td>
+      <td style="color:#a78bfa">${t.rr}:1</td>
+      <td>$${t.risk_amt.toLocaleString()}</td>
+      <td><span class="pill pill-${t.outcome.toLowerCase()}">${t.outcome}</span></td>
+      <td style="color:${pnlColor};font-weight:600">$${t.pnl > 0 ? '+' : ''}${t.pnl.toLocaleString()}</td>
+      <td>$${t.portfolio_value.toLocaleString()}</td>
+      <td style="color:${roiColor};font-weight:600">${t.roi_pct > 0 ? '+' : ''}${t.roi_pct}%</td>
+      <td style="color:var(--light);font-size:10px;max-width:160px">${t.note}</td>
+    </tr>`;
+  }).join('');
+}
+
+function filterLog() {
+  const contract  = document.getElementById('f-contract').value;
+  const outcome   = document.getElementById('f-outcome').value;
+  const direction = document.getElementById('f-direction').value;
+  const month     = document.getElementById('f-month').value;
+  const conviction= document.getElementById('f-conviction').value;
+  const search    = document.getElementById('f-search').value.toLowerCase();
+
+  currentTrades = TRADES.filter(t =>
+    (!contract   || t.contract  === contract)  &&
+    (!outcome    || t.outcome   === outcome)   &&
+    (!direction  || t.direction === direction) &&
+    (!month      || t.month     === month)     &&
+    (!conviction || t.conviction=== conviction)&&
+    (!search     || t.note.toLowerCase().includes(search) || t.contract.toLowerCase().includes(search))
+  );
+  renderLog(currentTrades);
+}
+
+function resetFilters() {
+  ['f-contract','f-outcome','f-direction','f-month','f-conviction'].forEach(id => document.getElementById(id).value = '');
+  document.getElementById('f-search').value = '';
+  currentTrades = [...TRADES];
+  renderLog(currentTrades);
+}
+
+function sortLog(key) {
+  if (sortKey === key) sortDir *= -1;
+  else { sortKey = key; sortDir = 1; }
+  currentTrades.sort((a,b) => {
+    const av = a[key], bv = b[key];
+    if (typeof av === 'number') return (av - bv) * sortDir;
+    return String(av).localeCompare(String(bv)) * sortDir;
+  });
+  renderLog(currentTrades);
+}
+
+// Initial render
+renderLog(TRADES);
+</script>
+</body>
+</html>
