@@ -1,4 +1,4 @@
-DISCLAIMER — US Futures Intelligence System Presentation
+DISCLAIMER — Financial Portfolio Intelligence System Presentation
 Effective Date: May 31, 2026
 
 For Educational and Informational Purposes Only. This presentation, including all associated materials — the Pre-Market PDF Report, Interactive Portfolio Dashboard, trade simulation data, trading plan, and any related documentation — is provided solely for educational and informational purposes. Nothing contained herein constitutes financial advice, investment advice, trading advice, or a recommendation to buy, sell, or hold any financial instrument.
