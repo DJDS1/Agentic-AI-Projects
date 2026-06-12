@@ -1,0 +1,616 @@
+{
+  "name": "RAG Financial Intelligence — Week 2 Project",
+  "nodes": [
+    {
+      "parameters": {
+        "content": "## RAG Financial Intelligence — Week 2 Project\n\n**One-liner:** My RAG app helps investment analysts answer financial questions from SEC filings + FMP company profiles via webhook API with >90% faithfulness and <15s latency.\n\n**RAG Stack:**\n- Corpus: FMP Company Profile + SEC EDGAR metadata (~1 doc per ticker)\n- Chunking: Recursive 512 chars / 50 overlap\n- Embedding: OpenAI text-embedding-3-small (1536-dim)\n- Store: n8n In-Memory (per-ticker memoryKey: financial_rag_TICKER)\n- Retrieval: Top-4 semantic chunks (retrieve-as-tool)\n- Generation: GPT-4o with citation instructions\n\n**Endpoints:**\n1. POST /webhook/rag-ingest {ticker} → index docs\n2. POST /webhook/rag-query {ticker, question} → AI answer",
+        "color": 4
+      },
+      "id": "01354f09-454b-4efa-b78c-9ccfbcd20476",
+      "name": "Sticky Note e19f2de4",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        736,
+        1328
+      ]
+    },
+    {
+      "parameters": {
+        "content": "## Flow 1: RAG Document Ingestion\n\nPOST /webhook/rag-ingest\nBody: { \"ticker\": \"AAPL\" }\n\nPipeline:\n1. Validate ticker symbol\n2. Fetch FMP company profile (description, sector, CEO, valuation)\n3. Fetch SEC EDGAR CIK for filing links\n4. Build full-text financial document\n5. Chunk → Embed → Store in per-ticker vector store\n\nSetup: Add OpenAI credential",
+        "color": 6
+      },
+      "id": "463810ab-b736-4529-a98b-99e791480749",
+      "name": "Sticky Note 28e3e7a3",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        736,
+        1328
+      ]
+    },
+    {
+      "parameters": {
+        "content": "## Flow 2: RAG Q&A Agent\n\nPOST /webhook/rag-query\nBody: { \"ticker\": \"AAPL\", \"question\": \"What are the main risk factors?\" }\n\nPipeline:\n1. Parse ticker + question\n2. AI Agent retrieves top-4 chunks from indexed vector store\n3. GPT-4o generates cited answer grounded in retrieved docs\n4. Returns JSON with answer + source metadata\n\nNote: Run /rag-ingest first for the ticker!",
+        "color": 5
+      },
+      "id": "27c25fe8-1b27-4afa-bd58-f7cddf9317d1",
+      "name": "Sticky Note 52e3f986",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        736,
+        1328
+      ]
+    },
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "rag-ingest",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "5f31ffa7-d5d1-4075-890f-cf3fcaa3e3d1",
+      "name": "RAG Ingest Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [
+        0,
+        208
+      ],
+      "webhookId": "49213a18-62ae-4d4b-9a81-89be90404252"
+    },
+    {
+      "parameters": {
+        "jsCode": "const ticker = ($input.first().json.body?.ticker || $input.first().json.query?.ticker || '').toString().trim().toUpperCase();\nif (!ticker) throw new Error('Missing ticker. POST body: {\"ticker\":\"AAPL\"}');\nif (!/^[A-Z.\\-]{1,10}$/.test(ticker)) throw new Error('Invalid ticker: ' + ticker);\nconst FMP_API_KEY = 'FMP_API_KEY';\nreturn [{ json: { ticker, fmpApiKey: FMP_API_KEY } }];"
+      },
+      "id": "2052d6be-5b19-40fc-9d2a-0d8b81dcf245",
+      "name": "Validate Ingest Ticker",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        224,
+        208
+      ]
+    },
+    {
+      "parameters": {
+        "url": "https://financialmodelingprep.com/stable/profile",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "symbol",
+              "value": "={{ $json.ticker }}"
+            },
+            {
+              "name": "apikey",
+              "value": "={{ $json.fmpApiKey }}"
+            }
+          ]
+        },
+        "options": {
+          "response": {
+            "response": {
+              "neverError": true
+            }
+          }
+        }
+      },
+      "id": "df29dd09-81aa-4e5c-988a-40e64e549839",
+      "name": "FMP Company Profile",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        448,
+        208
+      ]
+    },
+    {
+      "parameters": {
+        "url": "https://efts.sec.gov/LATEST/search-index",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "q",
+              "value": "={{ $('Validate Ingest Ticker').first().json.ticker }}"
+            },
+            {
+              "name": "forms",
+              "value": "10-K"
+            },
+            {
+              "name": "dateRange",
+              "value": "custom"
+            },
+            {
+              "name": "startdt",
+              "value": "2023-01-01"
+            }
+          ]
+        },
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "User-Agent",
+              "value": "n8n-rag-ingest contact@example.com"
+            }
+          ]
+        },
+        "options": {
+          "response": {
+            "response": {
+              "neverError": true
+            }
+          }
+        }
+      },
+      "id": "27b93af1-44a5-4708-acb7-3d687d820c6f",
+      "name": "SEC EDGAR CIK Lookup",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        672,
+        208
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const ticker = $('Validate Ingest Ticker').first().json.ticker;\nconst raw = $('FMP Company Profile').first().json;\nconst prof = Array.isArray(raw) ? (raw[0] || {}) : (raw || {});\nconst secData = $('SEC EDGAR CIK Lookup').first().json;\nconst cikSrc = secData?.hits?.hits?.[0]?._source || {};\nconst cik = (cikSrc.entity_id || '').toString().replace(/^CIK/i, '');\nconst fmt = (n) => n != null ? String(n) : 'N/A';\nconst fmtB = (n) => n ? '$' + (Number(n)/1e9).toFixed(2) + 'B' : 'N/A';\nconst doc = '# ' + fmt(prof.companyName) + ' (' + ticker + ') - Financial Intelligence Document\\n\\n' +\n  '## Company Overview\\n' +\n  'Ticker: ' + ticker + '\\n' +\n  'Company Name: ' + fmt(prof.companyName) + '\\n' +\n  'Exchange: ' + fmt(prof.exchangeShortName || prof.exchange) + '\\n' +\n  'Sector: ' + fmt(prof.sector) + '\\n' +\n  'Industry: ' + fmt(prof.industry) + '\\n' +\n  'Country: ' + fmt(prof.country) + '\\n' +\n  'CEO: ' + fmt(prof.ceo) + '\\n' +\n  'Full-Time Employees: ' + fmt(prof.fullTimeEmployees) + '\\n' +\n  'Website: ' + fmt(prof.website) + '\\n' +\n  'IPO Date: ' + fmt(prof.ipoDate) + '\\n' +\n  'SEC CIK: ' + cik + '\\n\\n' +\n  '## Business Description\\n' + (prof.description || 'No description available.') + '\\n\\n' +\n  '## Market and Valuation Data\\n' +\n  'Current Price: $' + fmt(prof.price) + '\\n' +\n  'Market Capitalization: ' + fmtB(prof.mktCap) + '\\n' +\n  'Beta (market sensitivity): ' + fmt(prof.beta) + '\\n' +\n  'Volume Average: ' + fmt(prof.volAvg) + '\\n' +\n  'Last Dividend Paid: $' + fmt(prof.lastDiv) + '\\n' +\n  'DCF Fair Value (FMP model): $' + fmt(prof.dcf) + '\\n' +\n  'DCF vs Market Price Differential: ' + fmt(prof.dcfDiff) + '%\\n\\n' +\n  '## SEC Filing References\\n' +\n  'CIK: ' + cik + '\\n' +\n  '10-K Filings URL: https://www.sec.gov/cgi-bin/browse-edgar?action=getcompany&CIK=' + cik + '&type=10-K\\n' +\n  'XBRL Company Facts: https://data.sec.gov/api/xbrl/companyfacts/CIK' + String(cik).padStart(10,'0') + '.json\\n\\n' +\n  '## Investment Risk Context\\n' +\n  fmt(prof.companyName) + ' operates in the ' + fmt(prof.sector) + ' sector (' + fmt(prof.industry) + ').\\n' +\n  'Beta of ' + fmt(prof.beta) + ' indicates ' + (parseFloat(prof.beta || 1) > 1 ? 'above-average' : 'below-average') + ' market sensitivity.\\n' +\n  'Dividend policy: last dividend $' + fmt(prof.lastDiv) + ' per share.\\n' +\n  'FMP DCF model implies ' + (parseFloat(prof.dcfDiff || 0) > 0 ? 'undervaluation' : 'overvaluation') + ' of ' + Math.abs(parseFloat(prof.dcfDiff || 0)).toFixed(1) + '% vs current price.\\n' +\n  'Document generated: ' + new Date().toISOString().slice(0,10);\nreturn [{ json: { ticker, document: doc, companyName: prof.companyName || ticker, cik, sector: prof.sector || 'N/A' } }];"
+      },
+      "id": "8358cd3f-0ec3-4568-a34d-90942d4e4adb",
+      "name": "Build Financial RAG Document",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        896,
+        208
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "insert",
+        "memoryKey": {
+          "__rl": true,
+          "mode": "id",
+          "value": "=financial_rag_{{ $json.ticker }}"
+        },
+        "clearStore": true
+      },
+      "id": "ef0e05d4-1a4e-4f11-b640-0cbee78347d4",
+      "name": "Insert into Financial Vector Store",
+      "type": "@n8n/n8n-nodes-langchain.vectorStoreInMemory",
+      "typeVersion": 1.3,
+      "position": [
+        1120,
+        208
+      ]
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "id": "18aa9b50-404e-4651-ac11-e694f9f086a5",
+      "name": "OpenAI Embeddings — text-embedding-3-small",
+      "type": "@n8n/n8n-nodes-langchain.embeddingsOpenAi",
+      "typeVersion": 1.2,
+      "position": [
+        1136,
+        432
+      ],
+      "credentials": {
+        "openAiApi": {
+          "id": "eqmstMC8CaAyJYfe",
+          "name": "n8n free OpenAI API credits"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsonMode": "expressionData",
+        "jsonData": "={{ $json.document }}",
+        "textSplittingMode": "custom",
+        "options": {
+          "metadata": {
+            "metadataValues": [
+              {
+                "name": "ticker",
+                "value": "={{ $json.ticker }}"
+              },
+              {
+                "name": "sector",
+                "value": "={{ $json.sector }}"
+              },
+              {
+                "name": "source",
+                "value": "FMP_SEC_EDGAR"
+              },
+              {
+                "name": "docType",
+                "value": "financial_profile"
+              }
+            ]
+          }
+        }
+      },
+      "id": "a0e6924a-33ce-458f-96d5-e5086fca8297",
+      "name": "Financial Document Loader",
+      "type": "@n8n/n8n-nodes-langchain.documentDefaultDataLoader",
+      "typeVersion": 1.1,
+      "position": [
+        1264,
+        432
+      ]
+    },
+    {
+      "parameters": {
+        "chunkSize": 512,
+        "chunkOverlap": 50,
+        "options": {}
+      },
+      "id": "1791fd14-a3e2-4b53-92cb-94e6bdd492cf",
+      "name": "Recursive Splitter (512 / 50)",
+      "type": "@n8n/n8n-nodes-langchain.textSplitterRecursiveCharacterTextSplitter",
+      "typeVersion": 1,
+      "position": [
+        1264,
+        640
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({ status: \"indexed\", ticker: $json.ticker, company: $json.companyName, memoryKey: \"financial_rag_\" + $json.ticker, chunking: \"recursive_512_50\", embeddingModel: \"text-embedding-3-small\", message: \"Financial docs embedded. Now query via POST /webhook/rag-query with {ticker, question}\" }) }}",
+        "options": {
+          "responseCode": 200
+        }
+      },
+      "id": "15573c47-1a10-4166-8067-d78f20998019",
+      "name": "Respond: Indexed",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.5,
+      "position": [
+        1472,
+        208
+      ]
+    },
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "rag-query",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "43094107-1fe3-475b-b7de-d70d4c6ef4cf",
+      "name": "RAG Query Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [
+        0,
+        848
+      ],
+      "webhookId": "297f389d-cc7a-4c62-815a-6614767923da"
+    },
+    {
+      "parameters": {
+        "jsCode": "const b = $input.first().json.body || $input.first().json;\nconst ticker = (b.ticker || '').toString().trim().toUpperCase();\nconst question = (b.question || '').toString().trim();\nif (!ticker) throw new Error('Missing ticker. Body: {\"ticker\":\"AAPL\",\"question\":\"...\"}');\nif (!question) throw new Error('Missing question. Body: {\"ticker\":\"AAPL\",\"question\":\"What are risk factors?\"}');\nif (!/^[A-Z.\\-]{1,10}$/.test(ticker)) throw new Error('Invalid ticker: ' + ticker);\nreturn [{ json: { ticker, question, memoryKey: 'financial_rag_' + ticker } }];"
+      },
+      "id": "a3a0405a-059a-4c57-8a7c-d935f6bd2b54",
+      "name": "Parse Query Input",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        224,
+        848
+      ]
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "={{ $('Parse Query Input').first().json.question }}",
+        "options": {
+          "systemMessage": "You are an expert financial analyst specializing in SEC filings and company fundamentals. Use the Financial Filing Knowledge Base tool to retrieve relevant information before answering. Structure every answer as: (1) Direct answer, (2) Evidence from retrieved documents with specific citations, (3) Key caveats or limitations. If documents are not found in the knowledge base, tell the user to first POST to /webhook/rag-ingest with the ticker symbol.",
+          "maxIterations": 5,
+          "returnIntermediateSteps": false
+        }
+      },
+      "id": "2b3ebbe7-5215-4ae9-8166-63d2557eed29",
+      "name": "Financial RAG Agent",
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 3.1,
+      "position": [
+        448,
+        848
+      ]
+    },
+    {
+      "parameters": {
+        "model": {
+          "__rl": true,
+          "mode": "id",
+          "value": "gpt-4o"
+        },
+        "builtInTools": {},
+        "options": {
+          "temperature": 0.1
+        }
+      },
+      "id": "d593997f-9ccc-493b-b912-ead6ee340a50",
+      "name": "GPT-4o Financial Analyst",
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+      "typeVersion": 1.3,
+      "position": [
+        464,
+        1072
+      ],
+      "credentials": {
+        "openAiApi": {
+          "id": "eqmstMC8CaAyJYfe",
+          "name": "n8n free OpenAI API credits"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "mode": "retrieve-as-tool",
+        "toolDescription": "Search indexed SEC filings, company profiles, business descriptions, risk factors, valuation data, and financial metrics for the queried stock ticker. Always use this tool first before answering financial questions about a specific company.",
+        "memoryKey": {
+          "__rl": true,
+          "mode": "id",
+          "value": "={{ $('Parse Query Input').first().json.memoryKey }}"
+        }
+      },
+      "id": "90662779-1457-45e1-bc98-8ea95ce2677d",
+      "name": "Financial Filing Knowledge Base",
+      "type": "@n8n/n8n-nodes-langchain.vectorStoreInMemory",
+      "typeVersion": 1.3,
+      "position": [
+        592,
+        1072
+      ]
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "id": "5c205fc5-0626-45fa-a7ab-8e132da80b25",
+      "name": "OpenAI Embeddings — Query",
+      "type": "@n8n/n8n-nodes-langchain.embeddingsOpenAi",
+      "typeVersion": 1.2,
+      "position": [
+        592,
+        1280
+      ],
+      "credentials": {
+        "openAiApi": {
+          "id": "eqmstMC8CaAyJYfe",
+          "name": "n8n free OpenAI API credits"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const ticker = $('Parse Query Input').first().json.ticker;\nconst question = $('Parse Query Input').first().json.question;\nconst answer = $input.first().json.output || '';\nreturn [{ json: { status: 'success', ticker, question, answer, retrievalSource: 'financial_rag_' + ticker, model: 'gpt-4o', embeddingModel: 'text-embedding-3-small', faithfulnessTarget: '>90%', timestamp: new Date().toISOString() } }];"
+      },
+      "id": "a490f21c-6fa3-4a36-bf2a-7fbc25c7669e",
+      "name": "Format RAG Response",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        800,
+        848
+      ]
+    },
+    {
+      "parameters": {
+        "options": {
+          "responseCode": 200
+        }
+      },
+      "id": "4bf48516-6c5d-4e32-b6a5-08d9888e8c77",
+      "name": "Respond: RAG Answer",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.5,
+      "position": [
+        1024,
+        848
+      ]
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "RAG Ingest Webhook": {
+      "main": [
+        [
+          {
+            "node": "Validate Ingest Ticker",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Validate Ingest Ticker": {
+      "main": [
+        [
+          {
+            "node": "FMP Company Profile",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "FMP Company Profile": {
+      "main": [
+        [
+          {
+            "node": "SEC EDGAR CIK Lookup",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "SEC EDGAR CIK Lookup": {
+      "main": [
+        [
+          {
+            "node": "Build Financial RAG Document",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Financial RAG Document": {
+      "main": [
+        [
+          {
+            "node": "Insert into Financial Vector Store",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Insert into Financial Vector Store": {
+      "main": [
+        [
+          {
+            "node": "Respond: Indexed",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "OpenAI Embeddings — text-embedding-3-small": {
+      "ai_embedding": [
+        [
+          {
+            "node": "Insert into Financial Vector Store",
+            "type": "ai_embedding",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Financial Document Loader": {
+      "ai_document": [
+        [
+          {
+            "node": "Insert into Financial Vector Store",
+            "type": "ai_document",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Recursive Splitter (512 / 50)": {
+      "ai_textSplitter": [
+        [
+          {
+            "node": "Financial Document Loader",
+            "type": "ai_textSplitter",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "RAG Query Webhook": {
+      "main": [
+        [
+          {
+            "node": "Parse Query Input",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse Query Input": {
+      "main": [
+        [
+          {
+            "node": "Financial RAG Agent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Financial RAG Agent": {
+      "main": [
+        [
+          {
+            "node": "Format RAG Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "GPT-4o Financial Analyst": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Financial RAG Agent",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Financial Filing Knowledge Base": {
+      "ai_tool": [
+        [
+          {
+            "node": "Financial RAG Agent",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "OpenAI Embeddings — Query": {
+      "ai_embedding": [
+        [
+          {
+            "node": "Financial Filing Knowledge Base",
+            "type": "ai_embedding",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Format RAG Response": {
+      "main": [
+        [
+          {
+            "node": "Respond: RAG Answer",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "availableInMCP": true
+  },
+  "versionId": "372d7014-293e-4c07-9c63-efa0e1360b48",
+  "meta": {
+    "aiBuilderAssisted": true,
+    "builderVariant": "mcp",
+    "instanceId": "7daad39a29bbadf4a2811d3c1cf098d0173e590d425e8d03b06102e5b7c3b498"
+  },
+  "nodeGroups": [],
+  "id": "NZcW470MuDrUKjMH",
+  "tags": []
+}

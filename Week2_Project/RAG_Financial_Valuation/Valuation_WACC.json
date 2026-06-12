@@ -1,0 +1,517 @@
+{
+  "name": "My workflow 4",
+  "nodes": [
+    {
+      "parameters": {
+        "content": "## WACC Stock Valuation\n\n**Trigger:** GET `<your-n8n-url>/webhook/stock-valuation?ticker=AAPL`\n\n**Pipeline:**\n1. Yahoo Finance → comprehensive financials, beta, market data\n2. Yahoo Finance ^TNX → live 10-yr Treasury (risk-free rate)\n3. SEC EDGAR → CIK + filing links for documentation\n4. Extract & normalize all financial data\n5. WACC = We·Re + Wd·Rd(1−t) [CAPM for Re]\n6. 10-Year DCF + Terminal Value (Gordon Growth)\n7. Sensitivity matrix (WACC ± 1%, TGR ± 0.5%)\n8. HTML report → api2pdf.com → PDF download\n\n**Setup required:**\n- api2pdf credential (free at api2pdf.com)\n- No other API keys needed",
+        "height": 340,
+        "width": 360,
+        "color": 7
+      },
+      "id": "37faf676-7f86-45ec-8360-a7803a12848a",
+      "name": "📊 Workflow Overview",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        0,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "content": "## WACC Formula \n**Cost of Equity (CAPM):**\nRe = Rf + β × ERP\n- Rf = 10-yr Treasury yield (live)\n- β = Yahoo Finance beta\n- ERP = Implied ERP (Jan 2025 ≈ 4.60%)\n\n**After-tax Cost of Debt:**\nRd(1−t) = (InterestExpense/TotalDebt) × (1−TaxRate)\n\n**Capital Structure:**\nWe = MktCap / (MktCap + TotalDebt)\nWd = TotalDebt / (MktCap + TotalDebt)\n\n**WACC:**\nWACC = We·Re + Wd·Rd(1−t)",
+        "height": 280,
+        "width": 360,
+        "color": 6
+      },
+      "id": "5947a441-d003-481c-a13f-a8b9404e87b3",
+      "name": "📐 WACC Methodology",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        0,
+        384
+      ]
+    },
+    {
+      "parameters": {
+        "content": "## DCF Valuation (10-Year Model)\n\n**FCF = NOPAT × (1 − Reinvestment Rate)**\nNOPAT = EBIT × (1 − Tax Rate)\n\n**Growth Stages:**\n- Stage 1 (Yr 1–5): Historical rev. growth (capped 20%)\n- Stage 2 (Yr 6–10): Avg of Stage 1 & terminal\n- Terminal: 2.5% (≤ nominal GDP growth)\n\n**Terminal Value (Gordon Growth):**\nTV = FCF₁₀ × (1+g) / (WACC − g)\n\n**Intrinsic Value:**\nEV = PV(FCFs) + PV(TV)\nEquity Value = EV − Debt + Cash\nIntrinsic/Share = Equity Value / Shares Out.",
+        "height": 280,
+        "width": 360,
+        "color": 5
+      },
+      "id": "6328c8bb-28c0-4d21-a548-6d186180d6ba",
+      "name": "💹 DCF Methodology",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        0,
+        704
+      ]
+    },
+    {
+      "parameters": {
+        "path": "stock-valuation",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "4c0b0934-f5f4-4b7d-aac2-ffdc857344e0",
+      "name": "Stock Ticker Input",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        400,
+        304
+      ],
+      "webhookId": "stock-valuation"
+    },
+    {
+      "parameters": {
+        "jsCode": "const ticker = ($input.first().json.query?.ticker || $input.first().json.body?.ticker || '').toString().trim().toUpperCase();\n\nif (!ticker || ticker.length === 0) {\n  throw new Error('Missing ticker parameter. Use: ?ticker=AAPL');\n}\nif (!/^[A-Z.\\-]{1,10}$/.test(ticker)) {\n  throw new Error(`Invalid ticker symbol: \"${ticker}\". Use standard stock symbols like AAPL, MSFT, GOOGL.`);\n}\n\nreturn [{ json: { ticker } }];"
+      },
+      "id": "0d025916-54d3-4235-b4ab-8529b4f917b4",
+      "name": "Validate Ticker",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        624,
+        304
+      ]
+    },
+    {
+      "parameters": {
+        "url": "https://financialmodelingprep.com/stable/quote",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "symbol",
+              "value": "={{ $('Validate Ticker').first().json.ticker }}"
+            },
+            {
+              "name": "apikey",
+              "value": "={{ $('⚙️ FMP API Key').first().json.fmpApiKey }}"
+            }
+          ]
+        },
+        "options": {
+          "response": {
+            "response": {
+              "neverError": true
+            }
+          }
+        }
+      },
+      "id": "fde8d615-1009-45a0-b544-95e99aa80146",
+      "name": "FMP — Quote",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1072,
+        304
+      ]
+    },
+    {
+      "parameters": {
+        "url": "https://query1.finance.yahoo.com/v8/finance/chart/%5ETNX",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "interval",
+              "value": "1d"
+            },
+            {
+              "name": "range",
+              "value": "5d"
+            }
+          ]
+        },
+        "options": {
+          "response": {
+            "response": {
+              "neverError": true
+            }
+          }
+        }
+      },
+      "id": "2d8e8b8b-eb28-41f0-acdb-c917cd1d6b8d",
+      "name": "Yahoo Finance — Risk-Free Rate",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1968,
+        304
+      ]
+    },
+    {
+      "parameters": {
+        "url": "https://efts.sec.gov/LATEST/search-index",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "q",
+              "value": "={{ $('Validate Ticker').first().json.ticker }}"
+            },
+            {
+              "name": "forms",
+              "value": "10-K"
+            },
+            {
+              "name": "dateRange",
+              "value": "custom"
+            },
+            {
+              "name": "startdt",
+              "value": "2023-01-01"
+            }
+          ]
+        },
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "User-Agent",
+              "value": "n8n-valuation-bot contact@example.com"
+            }
+          ]
+        },
+        "options": {
+          "response": {
+            "response": {
+              "neverError": true
+            }
+          }
+        }
+      },
+      "id": "8ca6d353-3a92-488e-bc0b-af9b8248d91d",
+      "name": "SEC EDGAR — CIK Lookup",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        2192,
+        304
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const ticker = $('Validate Ticker').first().json.ticker;\nconst n = (v) => (v !== null && v !== undefined && v !== '' && !isNaN(Number(v))) ? Number(v) : 0;\n\n// ── FMP Quote (market data) ────────────────────────────────────────────\nconst quoteRaw = $('FMP — Quote').first().json;\nlet q;\nif (Array.isArray(quoteRaw) && quoteRaw.length > 0) { q = quoteRaw[0]; }\nelse if (quoteRaw && typeof quoteRaw === 'object' && (quoteRaw.price || quoteRaw.symbol)) { q = quoteRaw; }\nelse { throw new Error(`FMP quote failed for \"${ticker}\": ${JSON.stringify(quoteRaw).slice(0, 200)}`); }\n\nconst currentPrice      = n(q.price);\nconst marketCap         = n(q.marketCap);\nconst sharesOutstanding = n(q.sharesOutstanding) || (marketCap > 0 && currentPrice > 0 ? marketCap / currentPrice : 0);\nconst beta              = 1.0; // FMP free tier omits beta; market-neutral default\nconst companyName       = q.name || ticker;\nconst exchange          = q.exchange || 'N/A';\n\nif (currentPrice === 0) throw new Error(`FMP quote returned zero price for \"${ticker}\". Check ticker is valid.`);\n\n// ── SEC EDGAR Company Facts (XBRL, 100% free) ─────────────────────────\nconst secData = $('SEC — Company Facts').first().json;\nif (!secData || !secData.facts) {\n  throw new Error(`SEC EDGAR returned no company facts for \"${ticker}\". Ensure ticker is a US-listed company with SEC filings.`);\n}\nconst facts = secData.facts;\nconst edgarName = secData.entityName || companyName;\n\n// Helper: get annual 10-K FY values for XBRL concept list (newest first)\nfunction getAnnual(concepts, maxYears) {\n  if (!maxYears) maxYears = 5;\n  for (const concept of concepts) {\n    const usgaap = facts['us-gaap'];\n    if (!usgaap || !usgaap[concept]) continue;\n    const usdUnits = usgaap[concept].units;\n    if (!usdUnits || !usdUnits.USD) continue;\n    const usd = usdUnits.USD;\n    if (!Array.isArray(usd) || usd.length === 0) continue;\n    const annual = usd\n      .filter(d => d.form === '10-K' && d.fp === 'FY')\n      .sort((a, b) => new Date(b.end) - new Date(a.end));\n    if (annual.length > 0) return annual.slice(0, maxYears);\n  }\n  return [];\n}\n\n// ── Revenue (3 years for 2-yr CAGR) ──────────────────────────────────────\nconst revRows = getAnnual([\n  'RevenueFromContractWithCustomerExcludingAssessedTax',\n  'Revenues', 'SalesRevenueNet',\n  'RevenueFromContractWithCustomerIncludingAssessedTax',\n  'SalesRevenueGoodsNet', 'RevenueFromContractWithCustomer',\n], 3);\nconst revenue      = n(revRows[0]?.val);\nconst revenue_prev = n(revRows[1]?.val);\nconst revenue_p2   = n(revRows[2]?.val);\nif (revenue === 0) throw new Error(`SEC EDGAR: no revenue data found for \"${ticker}\". This ticker may not file 10-Ks with the SEC.`);\n\n// ── Operating Income (EBIT proxy) ──────────────────────────────────────────\nconst ebitRows = getAnnual(['OperatingIncomeLoss'], 1);\nconst ebit = n(ebitRows[0]?.val);\n\n// ── Net Income ────────────────────────────────────────────────────────────\nconst niRows = getAnnual(['NetIncomeLoss','ProfitLoss','NetIncomeLossAvailableToCommonStockholdersBasic'], 1);\nconst netIncome = n(niRows[0]?.val);\n\n// ── Interest Expense ──────────────────────────────────────────────────────\nconst intRows = getAnnual(['InterestExpense','InterestExpenseDebt','InterestAndDebtExpense'], 1);\nconst interestExpense = Math.abs(n(intRows[0]?.val));\n\n// ── Income Tax ────────────────────────────────────────────────────────────\nconst taxRows = getAnnual(['IncomeTaxExpenseBenefit'], 1);\nconst incomeTax = n(taxRows[0]?.val);\n\nconst ptRows = getAnnual([\n  'IncomeLossFromContinuingOperationsBeforeIncomeTaxesExtraordinaryItemsNoncontrollingInterest',\n  'IncomeLossFromContinuingOperationsBeforeIncomeTaxesMinorityInterestAndIncomeLossFromEquityMethodInvestments',\n], 1);\nconst preTaxIncome = ptRows.length > 0 ? n(ptRows[0]?.val) : (netIncome + incomeTax);\nconst taxRate = preTaxIncome > 0 ? Math.max(0.05, Math.min(0.40, incomeTax / preTaxIncome)) : 0.21;\n\n// ── Debt ──────────────────────────────────────────────────────────────────\nconst ltdRows = getAnnual(['LongTermDebt','LongTermDebtNoncurrent','LongTermDebtAndCapitalLeaseObligations'], 1);\nconst longTermDebt = n(ltdRows[0]?.val);\nconst stdRows = getAnnual(['ShortTermBorrowings','DebtCurrent','LongTermDebtCurrent','LongTermDebtCurrentMaturities'], 1);\nconst shortTermDebt = n(stdRows[0]?.val);\nconst totalDebt = longTermDebt + shortTermDebt;\n\n// ── Cash ──────────────────────────────────────────────────────────────────\nconst cashRows = getAnnual([\n  'CashAndCashEquivalentsAtCarryingValue','Cash','CashAndCashEquivalents',\n  'CashCashEquivalentsAndShortTermInvestments',\n], 1);\nconst cash = n(cashRows[0]?.val);\n\n// ── Equity ────────────────────────────────────────────────────────────────\nconst eqRows = getAnnual(['StockholdersEquity','StockholdersEquityIncludingPortionAttributableToNoncontrollingInterest'], 1);\nconst totalEquity = n(eqRows[0]?.val);\n\n// ── Cash Flow ─────────────────────────────────────────────────────────────\nconst ocfRows = getAnnual(['NetCashProvidedByUsedInOperatingActivities'], 1);\nconst operatingCashFlow = n(ocfRows[0]?.val);\n\nconst cxRows = getAnnual(['PaymentsToAcquirePropertyPlantAndEquipment','PaymentsToAcquireProductiveAssets'], 1);\nconst capex = Math.abs(n(cxRows[0]?.val));\n\nconst dnaRows = getAnnual(['DepreciationDepletionAndAmortization','Depreciation','DepreciationAndAmortization'], 1);\nconst depreciationAmortization = n(dnaRows[0]?.val);\n\n// ── Derived metrics ───────────────────────────────────────────────────────\n// Revenue 2-yr CAGR capped at ±20% (standard DCF practice)\nlet revenueGrowth = 0.07;\nif (revenue > 0 && revenue_p2 > 0) {\n  revenueGrowth = Math.pow(revenue / revenue_p2, 0.5) - 1;\n} else if (revenue > 0 && revenue_prev > 0) {\n  revenueGrowth = (revenue / revenue_prev) - 1;\n}\nrevenueGrowth = Math.max(-0.50, Math.min(0.20, revenueGrowth));\n\nconst ebitMargin = revenue > 0 ? ebit / revenue : 0;\n\n// Reinvestment Rate (FCFF method)\n// RR = (CapEx − D&A) / NOPAT  → bounded [0, 1]\nconst nopat = ebit * (1 - taxRate);\nconst netCapex = capex - depreciationAmortization;\nconst reinvestmentRate = nopat > 0 ? Math.max(0, Math.min(0.95, netCapex / nopat)) : 0.30;\n\n// Free Cash Flow\nconst fcf = operatingCashFlow - capex;\nconst fcfMargin = revenue > 0 ? fcf / revenue : 0;\n\n// Cost of debt\nconst costOfDebt = (totalDebt > 0 && interestExpense > 0)\n  ? Math.max(0.02, Math.min(0.15, interestExpense / totalDebt))\n  : 0.04; // synthetic spread fallback\n\n// Valuation ratios (for HTML report)\nconst enterpriseValueMkt = marketCap + totalDebt - cash;\nconst ebitda = ebit + depreciationAmortization;\nconst evToEbitda = ebitda > 0 ? enterpriseValueMkt / ebitda : 0;\nconst debtToEquity = totalEquity !== 0 ? totalDebt / Math.abs(totalEquity) : 0;\nconst roic = (totalDebt + Math.abs(totalEquity)) > 0 ? nopat / (totalDebt + Math.abs(totalEquity)) : 0;\nconst epsTrailing = sharesOutstanding > 0 ? netIncome / sharesOutstanding : 0;\nconst trailingPE = epsTrailing > 0 ? currentPrice / epsTrailing : 0;\n\n// SEC EDGAR metadata\nconst cikSrc = $('SEC EDGAR — CIK Lookup').first().json?.hits?.hits?.[0]?._source || {};\nconst secCIK = (cikSrc.entity_id || (Array.isArray(cikSrc.ciks) ? cikSrc.ciks[0] : cikSrc.ciks) || '').toString().replace(/^CIK/i, '');\nconst secFilingUrl = secCIK\n  ? `https://www.sec.gov/cgi-bin/browse-edgar?action=getcompany&CIK=${secCIK}&type=10-K&dateb=&owner=include&count=5`\n  : 'https://www.sec.gov/cgi-bin/browse-edgar';\nconst valuationDate = new Date().toISOString().slice(0, 10);\n\nreturn [{\n  json: {\n    // Identifiers\n    ticker, companyName: edgarName, exchange,\n    sector: 'N/A', industry: 'N/A', currency: 'USD', valuationDate,\n    // Market data (FMP)\n    currentPrice, marketCap, sharesOutstanding, beta,\n    // Income (SEC EDGAR)\n    revenue, revenue_prev, revenue_p2, revenueGrowth,\n    ebit, ebitMargin, netIncome, interestExpense, incomeTax, taxRate,\n    // Balance sheet (SEC EDGAR)\n    totalDebt, cash, totalEquity,\n    // Cash flow (SEC EDGAR)\n    operatingCashFlow, capex, depreciationAmortization, fcf, fcfMargin,\n    // DCF inputs\n    nopat, reinvestmentRate, costOfDebt,\n    // Ratios (HTML report)\n    enterpriseValueMkt, evToEbitda, debtToEquity, roic,\n    trailingPE, forwardPE: 0,\n    // SEC metadata\n    secCIK, secFilingUrl,\n    // Debug\n    _dataSource: 'SEC EDGAR XBRL (financials) + FMP /stable/quote (market data)',\n    _betaNote: 'Defaulted to 1.0 — not available on FMP free tier'\n  }\n}];"
+      },
+      "id": "018a021c-463e-4857-8c5c-b59f3f93adf1",
+      "name": "Extract Financial Data",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2688,
+        304
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Extract the 10-year US Treasury yield from Yahoo Finance ^TNX\n// ^TNX is quoted in percent (e.g., 4.25 = 4.25%)\n\nconst tnxData = $('Yahoo Finance — Risk-Free Rate').first().json;\nlet riskFreeRate = 0.042; // fallback: 4.2%\n\ntry {\n  const closes = tnxData?.chart?.result?.[0]?.indicators?.quote?.[0]?.close;\n  if (closes && Array.isArray(closes)) {\n    const validCloses = closes.filter(v => v !== null && v !== undefined && !isNaN(v));\n    if (validCloses.length > 0) {\n      const latest = validCloses[validCloses.length - 1];\n      riskFreeRate = latest / 100;\n    }\n  }\n} catch (e) {\n  // Use fallback silently\n}\n\n// Published Implied Equity Risk Premium\n// Source: https://pages.stern.nyu.edu (NYU Stern)\n// Updated annually in January. Using Jan 2025 value: 4.60%\nconst equityRiskPremium = 0.046;\n\nreturn [{ json: { riskFreeRate, equityRiskPremium } }];"
+      },
+      "id": "890cc3f7-1d4d-49dc-8645-edb18e4db889",
+      "name": "Parse Risk-Free Rate",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2416,
+        512
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// ============================================================\n// STEP 2: WACC CALCULATION (Standard DCF Methodology)\n// ============================================================\n// WACC = We × Re + Wd × Rd(1−t)\n// Re  = Rf + β × ERP  (CAPM)\n// Rd  = Interest Expense / Total Debt\n// We  = Market Cap / (Market Cap + Total Debt)\n// Wd  = Total Debt / (Market Cap + Total Debt)\n\nconst fin = $('Extract Financial Data').first().json;\nconst rates = $('Parse Risk-Free Rate').first().json;\n\nconst riskFreeRate = rates.riskFreeRate;\nconst ERP = rates.equityRiskPremium;\n\n// --- COST OF EQUITY (CAPM) ---\nconst beta = fin.beta || 1.0;\nconst costOfEquity = riskFreeRate + (beta * ERP);\n\n// --- COST OF DEBT ---\nlet costOfDebtPretax;\nif (fin.totalDebt > 0 && fin.interestExpense > 0) {\n  costOfDebtPretax = fin.interestExpense / fin.totalDebt;\n  // Bound to reasonable range: synthetic rating approach\n  // (avoids distortion from short-term debt fluctuations)\n  costOfDebtPretax = Math.max(0.015, Math.min(costOfDebtPretax, 0.15));\n} else {\n  // Default: use risk-free rate + default spread for investment-grade firm\n  costOfDebtPretax = riskFreeRate + 0.015; // ~1.5% default spread\n}\nconst afterTaxCostOfDebt = costOfDebtPretax * (1 - fin.taxRate);\n\n// --- CAPITAL STRUCTURE WEIGHTS (Market Value) ---\nconst marketCap = fin.marketCap;\nconst totalDebt = fin.totalDebt;\nconst totalCapital = marketCap + totalDebt;\nconst weightEquity = totalCapital > 0 ? marketCap / totalCapital : 0.85;\nconst weightDebt = totalCapital > 0 ? totalDebt / totalCapital : 0.15;\n\n// --- WACC ---\nconst wacc = (weightEquity * costOfEquity) + (weightDebt * afterTaxCostOfDebt);\n\n// Sanity check: WACC must be > terminal growth rate (2.5%)\nif (wacc <= 0.025) {\n  throw new Error(`WACC (${(wacc*100).toFixed(2)}%) is too low for a valid DCF. Check beta and debt data.`);\n}\n\nreturn [{\n  json: {\n    riskFreeRate,\n    ERP,\n    beta,\n    costOfEquity,\n    costOfDebtPretax,\n    afterTaxCostOfDebt,\n    weightEquity,\n    weightDebt,\n    wacc,\n    // WACC component breakdown (for report)\n    waccComponents: {\n      equityContribution: weightEquity * costOfEquity,\n      debtContribution: weightDebt * afterTaxCostOfDebt,\n    }\n  }\n}];"
+      },
+      "id": "80e5520c-8c1d-40ef-87e9-fb5af96225e5",
+      "name": "Calculate WACC",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        768,
+        816
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// ============================================================\n// STEP 3: 10-YEAR DCF VALUATION (Standard DCF Framework)\n// ============================================================\n\nconst fin = $('Extract Financial Data').first().json;\nconst waccData = $('Calculate WACC').first().json;\n\nconst wacc = waccData.wacc;\nconst taxRate = fin.taxRate;\n\n// ---- GROWTH RATE ASSUMPTIONS ----\n// Standard DCF framework: 3 stages of growth\n//   Stage 1 (Yr 1-5): Aggressive growth anchored to historical CAGR\n//   Stage 2 (Yr 6-10): Transition phase tapering toward stable growth\n//   Terminal: Perpetuity growth ≤ nominal GDP growth (2.5%)\n\nconst historicalRevGrowth = fin.revenueGrowth;\n// Cap Stage 1 at 20% (practical upper bound for mature markets)\nconst stage1Growth = Math.min(Math.max(historicalRevGrowth, 0), 0.20);\nconst terminalGrowthRate = 0.025; // 2.5% perpetuity\nconst stage2Growth = (stage1Growth + terminalGrowthRate) / 2; // Linear taper\n\n// ---- FCF PROJECTION USING NOPAT METHOD ----\n// FCF = NOPAT × (1 − Reinvestment Rate)\n// This follows the FCFF approach\n\nconst baseRevenue = fin.revenue;\nconst ebitMargin = fin.ebitMargin;\nconst reinvestmentRate = fin.reinvestmentRate;\n\nconst projectedYears = [];\nlet runningRevenue = baseRevenue;\n\nfor (let year = 1; year <= 10; year++) {\n  const growthRate = year <= 5 ? stage1Growth : stage2Growth;\n  runningRevenue = runningRevenue * (1 + growthRate);\n\n  // EBIT (assuming stable margin; can be refined with sector data)\n  const ebitProjected = runningRevenue * ebitMargin;\n\n  // NOPAT\n  const nopatProjected = ebitProjected * (1 - taxRate);\n\n  // FCF to Firm (FCFF) = NOPAT × (1 − Reinvestment Rate)\n  const fcfProjected = nopatProjected * (1 - reinvestmentRate);\n\n  // Present Value\n  const pvFactor = Math.pow(1 + wacc, year);\n  const pv = fcfProjected / pvFactor;\n\n  projectedYears.push({\n    year,\n    growthRate,\n    revenue: runningRevenue,\n    ebit: ebitProjected,\n    nopat: nopatProjected,\n    fcf: fcfProjected,\n    pvFactor,\n    pv,\n  });\n}\n\n// ---- TERMINAL VALUE (Gordon Growth Model) ----\n// TV = FCF_year10 × (1 + g) / (WACC − g)\nconst lastFCF = projectedYears[9].fcf;\nconst terminalFCF = lastFCF * (1 + terminalGrowthRate);\nconst terminalValue = terminalFCF / (wacc - terminalGrowthRate);\nconst pvTerminalValue = terminalValue / Math.pow(1 + wacc, 10);\n\n// ---- ENTERPRISE VALUE & EQUITY VALUE ----\nconst pvFCFs = projectedYears.reduce((sum, y) => sum + y.pv, 0);\nconst enterpriseValue = pvFCFs + pvTerminalValue;\n\n// Bridge from EV to Equity Value (subtract debt, add cash)\nconst equityValue = enterpriseValue - fin.totalDebt + fin.cash;\nconst sharesOutstanding = fin.sharesOutstanding;\nconst intrinsicValuePerShare = sharesOutstanding > 0 ? equityValue / sharesOutstanding : 0;\n\nif (intrinsicValuePerShare <= 0) {\n  throw new Error(`Intrinsic value is negative ($${intrinsicValuePerShare.toFixed(2)}). This may indicate excessive debt or negative FCF. Review inputs.`);\n}\n\n// ---- VALUATION VERDICT ----\nconst currentPrice = fin.currentPrice;\nconst upside = ((intrinsicValuePerShare - currentPrice) / currentPrice) * 100;\nconst marginOfSafety = ((intrinsicValuePerShare - currentPrice) / intrinsicValuePerShare) * 100;\nconst tvAsPctOfEV = (pvTerminalValue / enterpriseValue) * 100;\n\nlet recommendation, verdictColor, verdictBg;\nif (upside >= 25) {\n  recommendation = 'STRONG BUY';\n  verdictColor = '#ffffff';\n  verdictBg = '#1a7f37';\n} else if (upside >= 10) {\n  recommendation = 'BUY';\n  verdictColor = '#ffffff';\n  verdictBg = '#2da44e';\n} else if (upside > -10) {\n  recommendation = 'HOLD / FAIRLY VALUED';\n  verdictColor = '#ffffff';\n  verdictBg = '#c6860c';\n} else if (upside > -25) {\n  recommendation = 'SELL';\n  verdictColor = '#ffffff';\n  verdictBg = '#cf222e';\n} else {\n  recommendation = 'STRONG SELL';\n  verdictColor = '#ffffff';\n  verdictBg = '#82071e';\n}\n\n// ---- SENSITIVITY ANALYSIS ----\n// 3×3 matrix: WACC (−1%, base, +1%) × TGR (−0.5%, base, +0.5%)\nconst waccDeltas = [-0.01, 0, 0.01];\nconst tgrDeltas = [-0.005, 0, 0.005];\nconst sensitivityMatrix = [];\n\nfor (const wd of waccDeltas) {\n  const row = [];\n  for (const td of tgrDeltas) {\n    const w = wacc + wd;\n    const g = terminalGrowthRate + td;\n    if (w <= g || w <= 0) { row.push(null); continue; }\n\n    // Recalculate PV of FCFs with modified WACC\n    let pvFCF_s = 0;\n    for (const y of projectedYears) {\n      pvFCF_s += y.fcf / Math.pow(1 + w, y.year);\n    }\n    const tv_s = (lastFCF * (1 + g)) / (w - g);\n    const pvTV_s = tv_s / Math.pow(1 + w, 10);\n    const ev_s = pvFCF_s + pvTV_s;\n    const eq_s = ev_s - fin.totalDebt + fin.cash;\n    const ivps = sharesOutstanding > 0 ? eq_s / sharesOutstanding : null;\n    row.push(ivps);\n  }\n  sensitivityMatrix.push(row);\n}\n\nreturn [{\n  json: {\n    stage1Growth, stage2Growth, terminalGrowthRate,\n    reinvestmentRate,\n    projectedYears,\n    pvFCFs, pvTerminalValue, terminalValue,\n    enterpriseValue, equityValue,\n    intrinsicValuePerShare, currentPrice,\n    upside, marginOfSafety, tvAsPctOfEV,\n    recommendation, verdictColor, verdictBg,\n    sensitivityMatrix,\n    waccVariants: waccDeltas.map(d => wacc + d),\n    tgrVariants: tgrDeltas.map(d => terminalGrowthRate + d),\n  }\n}];"
+      },
+      "id": "b7232a3b-23bc-4dd5-991c-f0e0872f14fc",
+      "name": "DCF Valuation",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1168,
+        816
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// ============================================================\n// STEP 4: GENERATE PROFESSIONAL HTML VALUATION REPORT\n// ============================================================\n\nconst fin = $('Extract Financial Data').first().json;\nconst waccData = $('Calculate WACC').first().json;\nconst dcf = $('DCF Valuation').first().json;\n\nconst fmt = (n, dec = 0) => n == null || isNaN(n) ? 'N/A' : n.toLocaleString('en-US', { minimumFractionDigits: dec, maximumFractionDigits: dec });\nconst fmtPct = (n, dec = 1) => n == null || isNaN(n) ? 'N/A' : (n * 100).toFixed(dec) + '%';\nconst fmtB = (n) => {\n  if (n == null || isNaN(n)) return 'N/A';\n  if (Math.abs(n) >= 1e12) return '$' + (n / 1e12).toFixed(2) + 'T';\n  if (Math.abs(n) >= 1e9) return '$' + (n / 1e9).toFixed(2) + 'B';\n  if (Math.abs(n) >= 1e6) return '$' + (n / 1e6).toFixed(1) + 'M';\n  return '$' + fmt(n);\n};\nconst fmtDollar = (n, dec = 2) => n == null || isNaN(n) ? 'N/A' : '$' + n.toFixed(dec);\n\n// Build projected years table rows\nconst projRows = dcf.projectedYears.map(y => `\n  <tr class=\"${y.year <= 5 ? 'stage1' : 'stage2'}\">\n    <td>${y.year}</td>\n    <td>${fmtPct(y.growthRate)}</td>\n    <td>${fmtB(y.revenue)}</td>\n    <td>${fmtB(y.ebit)}</td>\n    <td>${fmtB(y.nopat)}</td>\n    <td>${fmtB(y.fcf)}</td>\n    <td>${fmtB(y.pv)}</td>\n  </tr>`\n).join('');\n\n// Build sensitivity matrix\nconst sensWaccLabels = dcf.waccVariants.map(w => fmtPct(w));\nconst sensTGRLabels = dcf.tgrVariants.map(g => fmtPct(g));\nconst sensRows = dcf.sensitivityMatrix.map((row, wi) => {\n  const cells = row.map((val, gi) => {\n    if (val === null) return `<td class=\"sens-na\">N/A</td>`;\n    const diff = ((val - fin.currentPrice) / fin.currentPrice) * 100;\n    const cls = diff >= 15 ? 'sens-buy' : diff <= -15 ? 'sens-sell' : 'sens-hold';\n    return `<td class=\"${cls}\">${fmtDollar(val)}<br><small>${diff >= 0 ? '+' : ''}${diff.toFixed(1)}%</small></td>`;\n  }).join('');\n  return `<tr><td class=\"sens-label\">${sensWaccLabels[wi]}</td>${cells}</tr>`;\n}).join('');\n\nconst html = `<!DOCTYPE html>\n<html lang=\"en\">\n<head>\n<meta charset=\"UTF-8\">\n<title>${fin.ticker} — Intrinsic Valuation Report ${fin.valuationDate}</title>\n<style>\n  * { box-sizing: border-box; margin: 0; padding: 0; }\n  body { font-family: 'Helvetica Neue', Arial, sans-serif; font-size: 11pt; color: #1c1c1e; background: #fff; }\n  .page { max-width: 960px; margin: 0 auto; padding: 32px 40px; }\n  h1 { font-size: 22pt; font-weight: 700; color: #0a0a0a; }\n  h2 { font-size: 13pt; font-weight: 600; color: #1c1c1e; margin: 24px 0 10px; border-bottom: 2px solid #e5e5e5; padding-bottom: 6px; }\n  h3 { font-size: 11pt; font-weight: 600; color: #444; margin: 16px 0 8px; }\n  .header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 24px; }\n  .header-left h1 { margin-bottom: 4px; }\n  .header-left .subtitle { color: #555; font-size: 10pt; }\n  .header-right { text-align: right; font-size: 9pt; color: #777; }\n  .verdict-box { border-radius: 10px; padding: 20px 28px; margin: 20px 0; display: flex; align-items: center; gap: 28px; background: ${dcf.verdictBg}; color: ${dcf.verdictColor}; }\n  .verdict-label { font-size: 28pt; font-weight: 800; letter-spacing: -1px; }\n  .verdict-detail { flex: 1; }\n  .verdict-detail .v-row { display: flex; gap: 40px; margin-top: 6px; }\n  .verdict-detail .v-item { }\n  .verdict-detail .v-item .v-val { font-size: 18pt; font-weight: 700; }\n  .verdict-detail .v-item .v-key { font-size: 8pt; opacity: 0.85; text-transform: uppercase; letter-spacing: 0.5px; }\n  .metrics-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin: 16px 0; }\n  .metric-card { background: #f6f8fa; border-radius: 8px; padding: 12px 14px; }\n  .metric-card .mc-label { font-size: 8pt; color: #666; text-transform: uppercase; letter-spacing: 0.4px; margin-bottom: 4px; }\n  .metric-card .mc-value { font-size: 14pt; font-weight: 700; color: #1c1c1e; }\n  .metric-card .mc-sub { font-size: 8pt; color: #888; margin-top: 2px; }\n  table { width: 100%; border-collapse: collapse; font-size: 9.5pt; margin: 8px 0; }\n  th { background: #1c1c1e; color: #fff; padding: 7px 10px; text-align: right; font-weight: 600; font-size: 8.5pt; text-transform: uppercase; letter-spacing: 0.3px; }\n  th:first-child { text-align: left; }\n  td { padding: 6px 10px; text-align: right; border-bottom: 1px solid #ebebeb; }\n  td:first-child { text-align: left; }\n  tr:hover td { background: #f9f9f9; }\n  .stage1 td:first-child { border-left: 3px solid #2da44e; }\n  .stage2 td:first-child { border-left: 3px solid #c6860c; }\n  .wacc-table th { background: #1a3a5c; }\n  .wacc-highlight { background: #e8f0fe !important; font-weight: 700; }\n  .sens-buy { background: #d4edda; color: #155724; font-weight: 600; }\n  .sens-sell { background: #f8d7da; color: #721c24; font-weight: 600; }\n  .sens-hold { background: #fff3cd; color: #856404; }\n  .sens-na { background: #f0f0f0; color: #aaa; }\n  .sens-label { font-weight: 700; background: #f0f4ff; text-align: center !important; }\n  .formula-box { background: #f6f8fa; border-left: 4px solid #1a3a5c; border-radius: 4px; padding: 10px 16px; margin: 8px 0; font-family: 'Courier New', monospace; font-size: 9.5pt; color: #1c1c1e; }\n  .step-box { background: #fff; border: 1px solid #e0e0e0; border-radius: 8px; padding: 14px 18px; margin: 10px 0; }\n  .step-num { display: inline-block; background: #1a3a5c; color: #fff; border-radius: 50%; width: 22px; height: 22px; text-align: center; line-height: 22px; font-size: 9pt; font-weight: 700; margin-right: 8px; }\n  .two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin: 12px 0; }\n  .disclaimer { background: #fff8e1; border-left: 4px solid #f9a825; border-radius: 4px; padding: 12px 16px; font-size: 8.5pt; color: #555; margin-top: 24px; }\n  .source-link { color: #1a3a5c; text-decoration: none; font-size: 8.5pt; }\n  .page-break { page-break-before: always; }\n  @media print {\n    body { font-size: 10pt; }\n    .page { padding: 20px 28px; }\n    .verdict-box { -webkit-print-color-adjust: exact; print-color-adjust: exact; }\n    .sens-buy, .sens-sell, .sens-hold { -webkit-print-color-adjust: exact; print-color-adjust: exact; }\n    th { -webkit-print-color-adjust: exact; print-color-adjust: exact; }\n  }\n</style>\n</head>\n<body>\n<div class=\"page\">\n\n<!-- ===== HEADER ===== -->\n<div class=\"header\">\n  <div class=\"header-left\">\n    <h1>${fin.companyName} (${fin.ticker})</h1>\n    <div class=\"subtitle\">${fin.sector} · ${fin.industry} · ${fin.exchange} · ${fin.currency}</div>\n    <div class=\"subtitle\" style=\"margin-top:4px\">WACC-Based Intrinsic Valuation</div>\n  </div>\n  <div class=\"header-right\">\n    <div>Valuation Date: <strong>${fin.valuationDate}</strong></div>\n    <div style=\"margin-top:4px\">SEC CIK: <a href=\"${fin.secFilingUrl}\" class=\"source-link\">${fin.secCIK}</a></div>\n    <div style=\"margin-top:4px; font-size:8pt; color:#aaa\">Methodology: WACC-Based DCF (NYU Stern)</div>\n  </div>\n</div>\n\n<!-- ===== VERDICT ===== -->\n<div class=\"verdict-box\">\n  <div class=\"verdict-label\">${dcf.recommendation}</div>\n  <div class=\"verdict-detail\">\n    <div style=\"font-size:10pt; opacity:0.9; margin-bottom:8px\">DCF Intrinsic Value vs. Current Market Price</div>\n    <div class=\"v-row\">\n      <div class=\"v-item\"><div class=\"v-val\">${fmtDollar(dcf.intrinsicValuePerShare)}</div><div class=\"v-key\">Intrinsic Value / Share</div></div>\n      <div class=\"v-item\"><div class=\"v-val\">${fmtDollar(dcf.currentPrice)}</div><div class=\"v-key\">Current Market Price</div></div>\n      <div class=\"v-item\"><div class=\"v-val\">${dcf.upside >= 0 ? '+' : ''}${dcf.upside.toFixed(1)}%</div><div class=\"v-key\">Upside / (Downside)</div></div>\n      <div class=\"v-item\"><div class=\"v-val\">${dcf.marginOfSafety.toFixed(1)}%</div><div class=\"v-key\">Margin of Safety</div></div>\n    </div>\n  </div>\n</div>\n\n<!-- ===== KEY METRICS ===== -->\n<h2>Key Financial Metrics</h2>\n<div class=\"metrics-grid\">\n  <div class=\"metric-card\"><div class=\"mc-label\">Market Cap</div><div class=\"mc-value\">${fmtB(fin.marketCap)}</div><div class=\"mc-sub\">Market Value of Equity</div></div>\n  <div class=\"metric-card\"><div class=\"mc-label\">Enterprise Value</div><div class=\"mc-value\">${fmtB(fin.enterpriseValueMkt)}</div><div class=\"mc-sub\">Mkt EV (Yahoo Finance)</div></div>\n  <div class=\"metric-card\"><div class=\"mc-label\">Revenue (TTM)</div><div class=\"mc-value\">${fmtB(fin.revenue)}</div><div class=\"mc-sub\">Rev. Growth: ${fmtPct(fin.revenueGrowth)}</div></div>\n  <div class=\"metric-card\"><div class=\"mc-label\">EBIT (Operating Inc.)</div><div class=\"mc-value\">${fmtB(fin.ebit)}</div><div class=\"mc-sub\">EBIT Margin: ${fmtPct(fin.ebitMargin)}</div></div>\n  <div class=\"metric-card\"><div class=\"mc-label\">Free Cash Flow</div><div class=\"mc-value\">${fmtB(fin.fcf)}</div><div class=\"mc-sub\">FCF Margin: ${fmtPct(fin.fcfMargin)}</div></div>\n  <div class=\"metric-card\"><div class=\"mc-label\">Total Debt</div><div class=\"mc-value\">${fmtB(fin.totalDebt)}</div><div class=\"mc-sub\">D/E: ${fin.debtToEquity.toFixed(2)}x</div></div>\n  <div class=\"metric-card\"><div class=\"mc-label\">Cash & Equivalents</div><div class=\"mc-value\">${fmtB(fin.cash)}</div><div class=\"mc-sub\">Net Debt: ${fmtB(fin.totalDebt - fin.cash)}</div></div>\n  <div class=\"metric-card\"><div class=\"mc-label\">ROIC</div><div class=\"mc-value\">${fmtPct(fin.roic)}</div><div class=\"mc-sub\">Return on Invested Capital</div></div>\n  <div class=\"metric-card\"><div class=\"mc-label\">Beta (β)</div><div class=\"mc-value\">${fin.beta.toFixed(2)}</div><div class=\"mc-sub\">vs. Market (Yahoo Finance)</div></div>\n  <div class=\"metric-card\"><div class=\"mc-label\">Trailing P/E</div><div class=\"mc-value\">${fin.trailingPE ? fin.trailingPE.toFixed(1) + 'x' : 'N/A'}</div><div class=\"mc-sub\">Price / Earnings</div></div>\n  <div class=\"metric-card\"><div class=\"mc-label\">Forward P/E</div><div class=\"mc-value\">${fin.forwardPE ? fin.forwardPE.toFixed(1) + 'x' : 'N/A'}</div><div class=\"mc-sub\">Est. Forward Earnings</div></div>\n  <div class=\"metric-card\"><div class=\"mc-label\">EV/EBITDA</div><div class=\"mc-value\">${fin.evToEbitda ? fin.evToEbitda.toFixed(1) + 'x' : 'N/A'}</div><div class=\"mc-sub\">Enterprise Multiple</div></div>\n</div>\n\n<!-- ===== STEP-BY-STEP METHODOLOGY ===== -->\n<h2>Valuation Methodology — Step by Step</h2>\n\n<!-- STEP 1: WACC -->\n<div class=\"step-box\">\n  <h3><span class=\"step-num\">1</span> Weighted Average Cost of Capital (WACC)</h3>\n  <p style=\"font-size:9.5pt; color:#555; margin:6px 0 10px\">The WACC is the discount rate applied to all future cash flows. It reflects the blended required return across equity and debt holders, weighted by market-value capital structure.</p>\n  <div class=\"two-col\">\n    <div>\n      <h3 style=\"font-size:9.5pt\">Cost of Equity — CAPM</h3>\n      <div class=\"formula-box\">Re = Rf + β × ERP<br>Re = ${fmtPct(waccData.riskFreeRate)} + ${waccData.beta.toFixed(2)} × ${fmtPct(waccData.ERP)}<br>Re = <strong>${fmtPct(waccData.costOfEquity)}</strong></div>\n      <table class=\"\" style=\"margin-top:8px\">\n        <tr><td>Risk-Free Rate (Rf)</td><td>${fmtPct(waccData.riskFreeRate)}</td></tr>\n        <tr><td>Beta (β)</td><td>${waccData.beta.toFixed(3)}</td></tr>\n        <tr><td>Equity Risk Premium (ERP)</td><td>${fmtPct(waccData.ERP)}</td></tr>\n        <tr style=\"font-weight:700\"><td>Cost of Equity</td><td>${fmtPct(waccData.costOfEquity)}</td></tr>\n      </table>\n    </div>\n    <div>\n      <h3 style=\"font-size:9.5pt\">Cost of Debt (After-tax)</h3>\n      <div class=\"formula-box\">Rd = Interest Exp / Total Debt<br>Rd(1−t) = ${fmtPct(waccData.costOfDebtPretax)} × (1 − ${fmtPct(fin.taxRate)})<br>Rd(1−t) = <strong>${fmtPct(waccData.afterTaxCostOfDebt)}</strong></div>\n      <table style=\"margin-top:8px\">\n        <tr><td>Interest Expense</td><td>${fmtB(fin.interestExpense)}</td></tr>\n        <tr><td>Total Debt</td><td>${fmtB(fin.totalDebt)}</td></tr>\n        <tr><td>Pre-tax Cost of Debt</td><td>${fmtPct(waccData.costOfDebtPretax)}</td></tr>\n        <tr><td>Effective Tax Rate</td><td>${fmtPct(fin.taxRate)}</td></tr>\n        <tr style=\"font-weight:700\"><td>After-tax Cost of Debt</td><td>${fmtPct(waccData.afterTaxCostOfDebt)}</td></tr>\n      </table>\n    </div>\n  </div>\n  <h3 style=\"font-size:9.5pt; margin-top:14px\">WACC Calculation</h3>\n  <div class=\"formula-box\">WACC = We × Re + Wd × Rd(1−t)<br>WACC = ${fmtPct(waccData.weightEquity)} × ${fmtPct(waccData.costOfEquity)} + ${fmtPct(waccData.weightDebt)} × ${fmtPct(waccData.afterTaxCostOfDebt)}<br>WACC = <strong>${fmtPct(waccData.wacc)}</strong></div>\n  <table class=\"wacc-table\" style=\"margin-top:8px\">\n    <thead><tr><th>Component</th><th>Weight</th><th>Cost</th><th>Weighted Cost</th></tr></thead>\n    <tbody>\n      <tr><td>Equity (Market Cap)</td><td>${fmtPct(waccData.weightEquity)}</td><td>${fmtPct(waccData.costOfEquity)}</td><td>${fmtPct(waccData.waccComponents.equityContribution)}</td></tr>\n      <tr><td>Debt (Total Debt)</td><td>${fmtPct(waccData.weightDebt)}</td><td>${fmtPct(waccData.afterTaxCostOfDebt)}</td><td>${fmtPct(waccData.waccComponents.debtContribution)}</td></tr>\n      <tr class=\"wacc-highlight\"><td><strong>WACC</strong></td><td>100%</td><td>—</td><td><strong>${fmtPct(waccData.wacc)}</strong></td></tr>\n    </tbody>\n  </table>\n</div>\n\n<!-- STEP 2: FCF PROJECTIONS -->\n<div class=\"step-box page-break\" style=\"margin-top:20px\">\n  <h3><span class=\"step-num\">2</span> 10-Year Free Cash Flow Projections</h3>\n  <p style=\"font-size:9.5pt; color:#555; margin:6px 0 10px\">FCF is projected using NOPAT × (1 − Reinvestment Rate) with two growth stages. <span style=\"color:#2da44e; font-weight:600\">■ Green = Stage 1 (Yrs 1-5, ${fmtPct(dcf.stage1Growth)} growth)</span> · <span style=\"color:#c6860c; font-weight:600\">■ Orange = Stage 2 (Yrs 6-10, ${fmtPct(dcf.stage2Growth)} growth)</span></p>\n  <table>\n    <thead><tr><th>Year</th><th>Growth Rate</th><th>Revenue</th><th>EBIT</th><th>NOPAT</th><th>FCFF</th><th>PV of FCFF</th></tr></thead>\n    <tbody>\n      ${projRows}\n      <tr style=\"font-weight:700; background:#f0f4ff\"><td colspan=\"6\">PV of FCFs (Years 1–10)</td><td>${fmtB(dcf.pvFCFs)}</td></tr>\n    </tbody>\n  </table>\n\n  <h3 style=\"margin-top:16px\">Terminal Value (Gordon Growth Model)</h3>\n  <div class=\"formula-box\">TV = FCF₁₀ × (1 + g) / (WACC − g)<br>TV = ${fmtB(dcf.projectedYears[9].fcf)} × (1 + ${fmtPct(dcf.terminalGrowthRate)}) / (${fmtPct(waccData.wacc)} − ${fmtPct(dcf.terminalGrowthRate)})<br>TV = ${fmtB(dcf.terminalValue)} → PV = <strong>${fmtB(dcf.pvTerminalValue)}</strong></div>\n  <p style=\"font-size:8.5pt; color:#888; margin-top:6px\">Terminal Value represents ${dcf.tvAsPctOfEV.toFixed(1)}% of Enterprise Value — values above 80% indicate higher model sensitivity.</p>\n\n  <h3 style=\"margin-top:16px\">Bridge: Enterprise Value → Intrinsic Value Per Share</h3>\n  <table>\n    <tbody>\n      <tr><td>PV of Free Cash Flows (Yrs 1–10)</td><td>${fmtB(dcf.pvFCFs)}</td></tr>\n      <tr><td>PV of Terminal Value</td><td>${fmtB(dcf.pvTerminalValue)}</td></tr>\n      <tr style=\"font-weight:700\"><td>Enterprise Value (DCF)</td><td>${fmtB(dcf.enterpriseValue)}</td></tr>\n      <tr><td>Less: Total Debt</td><td style=\"color:#cf222e\">(${fmtB(fin.totalDebt)})</td></tr>\n      <tr><td>Plus: Cash & Equivalents</td><td style=\"color:#2da44e\">+${fmtB(fin.cash)}</td></tr>\n      <tr style=\"font-weight:700; background:#f0f4ff\"><td>Equity Value</td><td>${fmtB(dcf.equityValue)}</td></tr>\n      <tr><td>Shares Outstanding</td><td>${fmt(fin.sharesOutstanding / 1e6)}M</td></tr>\n      <tr style=\"font-weight:800; font-size:12pt; background:#e8f0fe\"><td>Intrinsic Value Per Share</td><td>${fmtDollar(dcf.intrinsicValuePerShare)}</td></tr>\n      <tr><td>Current Market Price</td><td>${fmtDollar(dcf.currentPrice)}</td></tr>\n      <tr style=\"font-weight:700; color:${dcf.verdictBg}\"><td>Upside / (Downside)</td><td>${dcf.upside >= 0 ? '+' : ''}${dcf.upside.toFixed(1)}%</td></tr>\n    </tbody>\n  </table>\n</div>\n\n<!-- STEP 3: SENSITIVITY ANALYSIS -->\n<div class=\"step-box\">\n  <h3><span class=\"step-num\">3</span> Sensitivity Analysis — Intrinsic Value Per Share</h3>\n  <p style=\"font-size:9.5pt; color:#555; margin:6px 0 10px\">Intrinsic value per share across different WACC (rows) and Terminal Growth Rate (columns) assumptions. Shows valuation robustness. <span style=\"background:#d4edda; padding:2px 6px; border-radius:3px; font-size:8.5pt\">Green = BUY (&gt;15% upside)</span> <span style=\"background:#fff3cd; padding:2px 6px; border-radius:3px; font-size:8.5pt\">Yellow = HOLD</span> <span style=\"background:#f8d7da; padding:2px 6px; border-radius:3px; font-size:8.5pt\">Red = SELL (&gt;15% downside)</span></p>\n  <table>\n    <thead>\n      <tr>\n        <th>WACC \\ TGR</th>\n        ${sensTGRLabels.map(l => `<th>${l}</th>`).join('')}\n      </tr>\n    </thead>\n    <tbody>${sensRows}</tbody>\n  </table>\n  <p style=\"font-size:8.5pt; color:#888; margin-top:8px\">Current Price: ${fmtDollar(fin.currentPrice)} · Base WACC: ${fmtPct(waccData.wacc)} · Base TGR: ${fmtPct(dcf.terminalGrowthRate)}</p>\n</div>\n\n<!-- STEP 4: GROWTH ASSUMPTIONS -->\n<div class=\"step-box\">\n  <h3><span class=\"step-num\">4</span> Key Assumptions Summary</h3>\n  <table>\n    <thead><tr><th>Assumption</th><th>Value</th><th>Source / Rationale</th></tr></thead>\n    <tbody>\n      <tr><td>Risk-Free Rate (Rf)</td><td>${fmtPct(waccData.riskFreeRate)}</td><td>10-Year US Treasury (^TNX, Yahoo Finance, live)</td></tr>\n      <tr><td>Equity Risk Premium (ERP)</td><td>${fmtPct(waccData.ERP)}</td><td>Implied ERP (NYU Stern) — Jan 2025 (pages.stern.nyu.edu (NYU Stern))</td></tr>\n      <tr><td>Beta (β)</td><td>${waccData.beta.toFixed(3)}</td><td>Yahoo Finance (5-year monthly regression vs. S&P 500)</td></tr>\n      <tr><td>WACC</td><td>${fmtPct(waccData.wacc)}</td><td>Calculated above</td></tr>\n      <tr><td>Revenue Growth — Stage 1 (Yrs 1–5)</td><td>${fmtPct(dcf.stage1Growth)}</td><td>Based on 2-yr CAGR from SEC/Yahoo filings, capped at 20%</td></tr>\n      <tr><td>Revenue Growth — Stage 2 (Yrs 6–10)</td><td>${fmtPct(dcf.stage2Growth)}</td><td>Linear fade from Stage 1 toward Terminal</td></tr>\n      <tr><td>Terminal Growth Rate (TGR)</td><td>${fmtPct(dcf.terminalGrowthRate)}</td><td>2.5% — Long-run nominal GDP growth (standard DCF convention)</td></tr>\n      <tr><td>EBIT Margin</td><td>${fmtPct(fin.ebitMargin)}</td><td>Most recent annual 10-K (stable margin assumption)</td></tr>\n      <tr><td>Effective Tax Rate</td><td>${fmtPct(fin.taxRate)}</td><td>Income Tax Expense / Pre-tax Income (from 10-K)</td></tr>\n      <tr><td>Reinvestment Rate</td><td>${fmtPct(dcf.reinvestmentRate)}</td><td>(CapEx − D&A) / NOPAT — Capital intensity proxy</td></tr>\n    </tbody>\n  </table>\n</div>\n\n<!-- DATA SOURCES -->\n<h2>Data Sources</h2>\n<table>\n  <thead><tr><th>Data Point</th><th>Source</th><th>URL</th></tr></thead>\n  <tbody>\n    <tr><td>Financial Statements (Income, B/S, CF)</td><td>Yahoo Finance quoteSummary API</td><td>query2.finance.yahoo.com</td></tr>\n    <tr><td>Current Stock Price, Beta, Market Cap</td><td>Yahoo Finance price module</td><td>query2.finance.yahoo.com</td></tr>\n    <tr><td>Risk-Free Rate (10-yr Treasury)</td><td>Yahoo Finance ^TNX</td><td>query1.finance.yahoo.com/v8/finance/chart/%5ETNX</td></tr>\n    <tr><td>Equity Risk Premium</td><td>NYU Stern</td><td>pages.stern.nyu.edu (NYU Stern)</td></tr>\n    <tr><td>SEC Filings (10-K annual reports)</td><td>SEC EDGAR Full-Text Search</td><td><a href=\"${fin.secFilingUrl}\" class=\"source-link\">${fin.secFilingUrl}</a></td></tr>\n  </tbody>\n</table>\n\n<!-- DISCLAIMER -->\n<div class=\"disclaimer\">\n  <strong>⚠ Disclaimer:</strong> This report is generated automatically using publicly available data and is for educational and informational purposes only. It does not constitute financial advice, investment advice, or a recommendation to buy or sell any security. All DCF models are sensitive to assumptions — particularly the terminal growth rate and WACC. Past financial performance is not indicative of future results. Always conduct your own due diligence and consult a licensed financial advisor before making investment decisions. Data sourced from Yahoo Finance and SEC EDGAR; timeliness and accuracy are not guaranteed.\n</div>\n\n<div style=\"text-align:center; margin-top:24px; font-size:8pt; color:#bbb\">\n  Generated by n8n · WACC Valuation Workflow · ${fin.valuationDate} · Methodology: WACC-Based DCF (NYU Stern School of Business)\n</div>\n\n</div>\n</body>\n</html>`;\n\nreturn [{ json: { html, ticker: fin.ticker, companyName: fin.companyName } }];"
+      },
+      "id": "b1287b83-a43a-4d5a-9905-5edd713315ad",
+      "name": "Generate HTML Report",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1616,
+        816
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://v2.api2pdf.com/chrome/html",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "c29c9b73-a6a0-4aaf-b331-94e05db29554"
+            },
+            {}
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"html\": {{ JSON.stringify($json.html) }},\n  \"inline\": false,\n  \"filename\": \"{{ $json.ticker }}-Valuation-{{ $now.format('yyyy-MM-dd') }}.pdf\",\n  \"options\": {\n    \"margin\": { \"top\": \"15mm\", \"bottom\": \"15mm\", \"left\": \"12mm\", \"right\": \"12mm\" },\n    \"printBackground\": true,\n    \"landscape\": false\n  }\n}",
+        "options": {}
+      },
+      "id": "73ef44a1-d6d3-432c-ab6a-2359166bda87",
+      "name": "Convert HTML to PDF (api2pdf)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        2096,
+        816
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "FSDeZtFFiO29fCnP",
+          "name": "Header Auth account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={\n  \"status\": \"success\",\n  \"ticker\": \"{{ $('Generate HTML Report').first().json.ticker }}\",\n  \"company\": \"{{ $('Generate HTML Report').first().json.companyName }}\",\n  \"recommendation\": \"{{ $('DCF Valuation').first().json.recommendation }}\",\n  \"intrinsicValue\": {{ $('DCF Valuation').first().json.intrinsicValuePerShare.toFixed(2) }},\n  \"currentPrice\": {{ $('DCF Valuation').first().json.currentPrice.toFixed(2) }},\n  \"upside\": {{ $('DCF Valuation').first().json.upside.toFixed(1) }},\n  \"pdfUrl\": \"{{ $json.pdf }}\"\n}",
+        "options": {
+          "responseCode": 200
+        }
+      },
+      "id": "d142dfd0-5894-4df6-b9ec-dec395c78864",
+      "name": "Return PDF Download",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        2576,
+        816
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const FMP_API_KEY = 'FMP_API_KEY'; // ← paste your key here\nconst ticker = $input.first().json.ticker;\nreturn [{ json: { ticker, fmpApiKey: FMP_API_KEY } }];"
+      },
+      "id": "5e746a71-d7c5-4522-962d-8b864cd14468",
+      "name": "⚙️ FMP API Key",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        848,
+        304
+      ]
+    },
+    {
+      "parameters": {
+        "url": "={{ (() => { const src = $('SEC EDGAR — CIK Lookup').first().json?.hits?.hits?.[0]?._source || {}; const cik = src.entity_id || (Array.isArray(src.ciks) ? src.ciks[0] : src.ciks) || '0'; return 'https://data.sec.gov/api/xbrl/companyfacts/CIK' + String(cik).replace(/^CIK/i,'').padStart(10,'0') + '.json'; })() }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "User-Agent",
+              "value": ""
+            }
+          ]
+        },
+        "options": {
+          "timeout": 30000
+        }
+      },
+      "id": "cc472bd9-682f-4ad4-ac62-2c2d7bf180be",
+      "name": "SEC — Company Facts",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        2416,
+        304
+      ]
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Stock Ticker Input": {
+      "main": [
+        [
+          {
+            "node": "Validate Ticker",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse Risk-Free Rate": {
+      "main": [
+        [
+          {
+            "node": "Calculate WACC",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Calculate WACC": {
+      "main": [
+        [
+          {
+            "node": "DCF Valuation",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "DCF Valuation": {
+      "main": [
+        [
+          {
+            "node": "Generate HTML Report",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Generate HTML Report": {
+      "main": [
+        [
+          {
+            "node": "Convert HTML to PDF (api2pdf)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Convert HTML to PDF (api2pdf)": {
+      "main": [
+        [
+          {
+            "node": "Return PDF Download",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Yahoo Finance — Risk-Free Rate": {
+      "main": [
+        [
+          {
+            "node": "SEC EDGAR — CIK Lookup",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract Financial Data": {
+      "main": [
+        [
+          {
+            "node": "Parse Risk-Free Rate",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Validate Ticker": {
+      "main": [
+        [
+          {
+            "node": "⚙️ FMP API Key",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "⚙️ FMP API Key": {
+      "main": [
+        [
+          {
+            "node": "FMP — Quote",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "FMP — Quote": {
+      "main": [
+        [
+          {
+            "node": "Yahoo Finance — Risk-Free Rate",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "SEC EDGAR — CIK Lookup": {
+      "main": [
+        [
+          {
+            "node": "SEC — Company Facts",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "SEC — Company Facts": {
+      "main": [
+        [
+          {
+            "node": "Extract Financial Data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "timeSavedMode": "fixed",
+    "callerPolicy": "workflowsFromSameOwner",
+    "availableInMCP": true
+  },
+  "versionId": "c4f00771-9000-40b2-90b4-e518e7f8ffd0",
+  "meta": {
+    "aiBuilderAssisted": true,
+    "builderVariant": "mcp",
+    "instanceId": "7daad39a29bbadf4a2811d3c1cf098d0173e590d425e8d03b06102e5b7c3b498"
+  },
+  "nodeGroups": [],
+  "id": "94LnAeM8PpFn4Xob",
+  "tags": []
+}
